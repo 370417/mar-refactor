@@ -1,0 +1,20 @@
+{
+  "name": "many-a-rogue",
+  "version": "0.0.1",
+  "description": "A roguelike",
+  "main": "js/index.js",
+  "dependencies": {
+    "rollup": "0.25.6"
+  },
+  "devDependencies": {
+    "babel-preset-es2015-rollup": "1.1.1",
+    "rollup": "0.25.6",
+    "rollup-plugin-babel": "2.4.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "./node_modules/rollup/bin/rollup -c"
+  },
+  "author": "",
+  "license": "MIT"
+}
