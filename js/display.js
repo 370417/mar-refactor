@@ -28,9 +28,15 @@ const prototype = {
 	},
 	// draw a level
 	draw(level) {
+		const u = this.unit;
 		for (let x = 0; x < this.width; x++) for (let y = 0; y < this.height; y++) {
-			let tile = this.cacheTile(level[x][y]);
-			this.ctx.drawImage(tile.canvas, 0, 0, this.unit, this.unit, x * this.unit, y * this.unit, this.unit, this.unit);
+			//let tile = this.cacheTile(level[x][y]);
+			let tile = level[x][y];
+			if (tile.actor) {
+				this.ctx.drawImage(tile.actor.canvas, 0, 0, u, u, x * u, y * u, u, u);
+			} else {
+				this.ctx.drawImage(tile.canvas, 0, 0, u, u, x * u, y * u, u, u);
+			}
 		}
 	},
 	cacheTile(tile) {
@@ -46,6 +52,11 @@ const prototype = {
 		tile.canvas = canvas;
 		return tile;
 	},
+	cacheLevel(level) {
+		for (let x = 0; x < this.width; x++) for (let y = 0; y < this.height; y++) {
+			this.cacheTile(level[x][y]);
+		}
+	}
 };
 
 export default ({root}) => {

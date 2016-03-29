@@ -4,7 +4,7 @@
   "description": "A roguelike",
   "main": "js/index.js",
   "dependencies": {
-    "rollup": "0.25.6"
+    "a-star": "0.2.0"
   },
   "devDependencies": {
     "babel-preset-es2015-rollup": "1.1.1",
@@ -15,6 +15,6 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "./node_modules/rollup/bin/rollup -c"
   },
-  "author": "",
+  "author": "as-f",
   "license": "MIT"
 }

@@ -1,5 +1,7 @@
 import createTile from "./tile";
 
+let level;
+
 // create a 2d array with dimensions width by height and filled with content
 const create2dArray = (width, height, content) => {
     const isFunction = typeof content === "function";
@@ -54,7 +56,7 @@ const xDir4 = [0, 1, 0,-1];
 const yDir4 = [1, 0,-1, 0];
 
 // whether point (x, y) is surrounded by type
-const surrounded = (x, y, type, level, xDir = xDir8, yDir = yDir8) => {
+const surrounded = (x, y, type, xDir = xDir8, yDir = yDir8) => {
     for (let i = 0; i < xDir.length; i++) {
         if (level[x + xDir[i]][y + yDir[i]] !== type) {
             return false;
@@ -64,7 +66,7 @@ const surrounded = (x, y, type, level, xDir = xDir8, yDir = yDir8) => {
 };
 
 // count the number of contiguous groups of walls around a tile
-const countGroups = (x, y, level) => {
+const countGroups = (x, y) => {
     let groups = 0;
     // prev is the last tile that will be visited
     let prev = level[x + xDir8[7]][y + yDir8[7]];
@@ -82,12 +84,12 @@ const countGroups = (x, y, level) => {
 };
 
 // generate floor in the level to create caves
-const generateFloor = (level, width, height, prng = Math.random) => {
+const generateFloor = (width, height, prng = Math.random) => {
     // loop through the level randomly
     randRange(width * height, prng).forEach(index => {
         const [x, y] = getCoord(index, width, height);
         if (!onEdge(x, y, width, height)) {
-            if (surrounded(x, y, "wall", level) || countGroups(x, y, level) !== 1) {
+            if (surrounded(x, y, "wall") || countGroups(x, y) !== 1) {
                 level[x][y] = "floor";
             }
         }
@@ -95,27 +97,36 @@ const generateFloor = (level, width, height, prng = Math.random) => {
 };
 
 // remove walls that are surrounded by floor in 4 directions
-const removeIsolatedWalls = (level, width, height) => {
+const removeIsolatedWalls = (width, height) => {
     for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
-        if (!onEdge(x, y, width, height) && level[x][y] === "wall" && surrounded(x, y, "floor", level, xDir4, yDir4)) {
+        if (!onEdge(x, y, width, height) && level[x][y] === "wall" && surrounded(x, y, "floor", xDir4, yDir4)) {
             level[x][y] = "floor";
         }
     }
 };
 
-const convert2Tiles = (level, width, height) => {
+const convert2Tiles = (width, height) => {
     for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
         level[x][y] = createTile(level[x][y]);
     }
 };
 
-export default ({width, height, prng = Math.random}) => {
+const createLevel = ({width, height, prng = Math.random}) => {
 	// create a 2d array to represent the level
-	const level = create2dArray(width, height, "wall");
+	level = create2dArray(width, height, "wall");
 
-    generateFloor(level, width, height, prng);
-    removeIsolatedWalls(level, width, height);  
-    convert2Tiles(level, width, height);
+    generateFloor(width, height, prng);
+    removeIsolatedWalls(width, height);
+    convert2Tiles(width, height);
 
 	return level;
 };
+
+const populateLevel = (player) => {
+    level[1][1].actor = player;
+
+    return level;
+};
+
+export {createLevel, populateLevel};
+
