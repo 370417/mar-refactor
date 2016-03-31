@@ -2,14 +2,14 @@ const Tiles = {
 	wall: {
         type: "wall",
         color: "white",
-		spritex: 3,
-		spritey: 4,
+		spritex: 0,
+		spritey: 0,
 	},
     floor: {
         type: "floor",
         color: "white",
         spritex: 1,
-        spritey: 4,
+        spritey: 0,
     },
 };
 

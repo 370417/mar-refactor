@@ -22,7 +22,7 @@ const startGame = ({seed, width, height}) => {
     game.player.act();
 };
 
-export default ({seed = 0, display, width = 40, height = 30}) => {
+export default ({seed = 0, display, width = 60, height = 30}) => {
     game = {
         seed,
         display,
@@ -30,6 +30,6 @@ export default ({seed = 0, display, width = 40, height = 30}) => {
         height,
     };
 
-	display.setDimensions(width, height, 8, 2);
+	display.setDimensions(width, height, 16, 18, 1);
 	display.load("tileset.png", startGame.bind(null, {seed, width, height}));
 };

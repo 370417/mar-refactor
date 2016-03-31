@@ -6,15 +6,16 @@ const prototype = {
 	// set the dimensions of the dislpay
 	// unit is the size in pixels of a tile
 	// scale scales everything up
-	setDimensions(width, height, unit, scale) {
+	setDimensions(width, height, xunit, yunit, scale) {
 		this.width = width;
 		this.height = height;
-		this.unit = unit;
+		this.xunit = xunit;
+		this.yunit = yunit;
 		this.scale = scale;
-		this.canvas.width = width * unit;
-		this.canvas.height = height * unit;
-		this.canvas.style.width = width * unit * scale + "px";
-		this.canvas.style.height = height * unit * scale + "px";
+		this.canvas.width = (width - height / 2) * xunit;
+		this.canvas.height = height * yunit;
+		this.canvas.style.width = (width - height / 2) * xunit * scale + "px";
+		this.canvas.style.height = height * yunit * scale + "px";
 	},
 	// load the spritesheet then call callback
 	load(path, callback) {
@@ -28,27 +29,29 @@ const prototype = {
 	},
 	// draw a level
 	draw(level) {
-		const u = this.unit;
-		for (let x = 0; x < this.width; x++) for (let y = 0; y < this.height; y++) {
-			//let tile = this.cacheTile(level[x][y]);
+		this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+		const xu = this.xunit;
+		const yu = this.yunit;
+		for (let y = 0; y < this.height; y++) for (let x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 			let tile = level[x][y];
 			if (tile.actor) {
-				this.ctx.drawImage(tile.actor.canvas, 0, 0, u, u, x * u, y * u, u, u);
+				this.ctx.drawImage(tile.actor.canvas, 0, 0, xu, yu, x * xu, y * yu, xu, yu);
 			} else {
-				this.ctx.drawImage(tile.canvas, 0, 0, u, u, x * u, y * u, u, u);
+				this.ctx.drawImage(tile.canvas, 0, 0, xu, yu, (x - (this.height - y) / 2) * xu, y * yu, xu, yu);
 			}
 		}
 	},
 	cacheTile(tile) {
-        const u = this.unit;
+        const xu = this.xunit;
+        const yu = this.yunit;
 		const canvas = document.createElement("canvas");
-		canvas.width = u;
-		canvas.height = u;
+		canvas.width = xu;
+		canvas.height = yu;
 		const ctx = canvas.getContext("2d");
-		ctx.drawImage(this.tileset, tile.spritex * u, tile.spritey * u, u, u, 0, 0, u, u);
+		ctx.drawImage(this.tileset, tile.spritex * xu, tile.spritey * yu, xu, yu, 0, 0, xu, yu);
         ctx.fillStyle = colors[tile.color];
         ctx.globalCompositeOperation = "source-in";
-        ctx.fillRect(0, 0, u, u);
+        ctx.fillRect(0, 0, xu, yu);
 		tile.canvas = canvas;
 		return tile;
 	},

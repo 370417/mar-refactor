@@ -44,14 +44,14 @@ var Tiles = {
   wall: {
     type: "wall",
     color: "white",
-    spritex: 3,
-    spritey: 4
+    spritex: 0,
+    spritey: 0
   },
   floor: {
     type: "floor",
     color: "white",
     spritex: 1,
-    spritey: 4
+    spritey: 0
   }
 };
 
@@ -107,25 +107,31 @@ var randRange = function randRange(size) {
     return array;
 };
 
-// whether point (x, y) is on the edge of the level
-var onEdge = function onEdge(x, y, width, height) {
-    return x === 0 || y === 0 || x === width - 1 || y === height - 1;
+// whether point (x, y) is in the level
+var inBounds = function inBounds(x, y, width, height) {
+    return x >= 0 && y >= 0 && x < width && y < height;
 };
 
-// [xDir8[n], yDir8[n]] corresponds to one of the 8 directions in clock order
-var xDir8 = [0, 1, 1, 1, 0, -1, -1, -1];
-var yDir8 = [1, 1, 0, -1, -1, -1, 0, 1];
+var inInnerBounds = function inInnerBounds(x, y, width, height) {
+    return x > (height - y) / 2 && x < width - 1 - y / 2 && y > 0 && y < height - 1;
+};
 
-// [xDir4[n], yDir4[n]] corresponds to one of the 4 cardinal directions in clock order
-var xDir4 = [0, 1, 0, -1];
-var yDir4 = [1, 0, -1, 0];
+var xDir = [0, 1, 1, 0, -1, -1];
+var yDir = [1, 0, -1, -1, 0, 1];
+
+var floodFill = function floodFill(x, y, width, height, type, callback) {
+    if (!inBounds(x, y, width, height) || level[x][y] !== type) {
+        return;
+    }
+    callback(x, y);
+    for (var i = 0; i < 6; i++) {
+        floodFill(x + xDir[i], y + yDir[i], width, height, type, callback);
+    }
+};
 
 // whether point (x, y) is surrounded by type
 var surrounded = function surrounded(x, y, type) {
-    var xDir = arguments.length <= 3 || arguments[3] === undefined ? xDir8 : arguments[3];
-    var yDir = arguments.length <= 4 || arguments[4] === undefined ? yDir8 : arguments[4];
-
-    for (var i = 0; i < xDir.length; i++) {
+    for (var i = 0; i < 6; i++) {
         if (level[x + xDir[i]][y + yDir[i]] !== type) {
             return false;
         }
@@ -137,10 +143,10 @@ var surrounded = function surrounded(x, y, type) {
 var countGroups = function countGroups(x, y) {
     var groups = 0;
     // prev is the last tile that will be visited
-    var prev = level[x + xDir8[7]][y + yDir8[7]];
+    var prev = level[x + xDir[5]][y + yDir[5]];
     // loop through neighbors in order
-    for (var i = 0; i < 8; i++) {
-        var curr = level[x + xDir8[i]][y + yDir8[i]];
+    for (var i = 0; i < 6; i++) {
+        var curr = level[x + xDir[i]][y + yDir[i]];
         // count transitions from floor to wall
         if (prev !== "wall" && curr === "wall") {
             groups++;
@@ -164,7 +170,7 @@ var generateFloor = function generateFloor(width, height) {
         var x = _getCoord2[0];
         var y = _getCoord2[1];
 
-        if (!onEdge(x, y, width, height)) {
+        if (inInnerBounds(x, y, width, height)) {
             if (surrounded(x, y, "wall") || countGroups(x, y) !== 1) {
                 level[x][y] = "floor";
             }
@@ -172,12 +178,51 @@ var generateFloor = function generateFloor(width, height) {
     });
 };
 
-// remove walls that are surrounded by floor in 4 directions
+// remove all but the largest group of floor
+var removeIsolatedFloor = function removeIsolatedFloor(width, height) {
+    var maxSize = 0;
+    for (var x = 1; x < width - 1; x++) {
+        var _loop = function _loop(y) {
+            var tempTile = { size: 0 };
+            floodFill(x, y, width, height, "floor", function (x, y) {
+                level[x][y] = tempTile;
+                tempTile.size++;
+            });
+            if (tempTile.size > maxSize) {
+                maxSize = tempTile.size;
+            }
+        };
+
+        for (var y = 1; y < height - 1; y++) {
+            _loop(y);
+        }
+    }for (var _x4 = 1; _x4 < width - 1; _x4++) {
+        for (var _y = 1; _y < height - 1; _y++) {
+            if (level[_x4][_y].size) {
+                level[_x4][_y] = level[_x4][_y].size === maxSize ? "floor" : "wall";
+            }
+        }
+    }
+};
+
+// remove groups of 5 or less walls
 var removeIsolatedWalls = function removeIsolatedWalls(width, height) {
-    for (var x = 0; x < width; x++) {
-        for (var y = 0; y < height; y++) {
-            if (!onEdge(x, y, width, height) && level[x][y] === "wall" && surrounded(x, y, "floor", xDir4, yDir4)) {
-                level[x][y] = "floor";
+    for (var x = 2; x < width - 2; x++) {
+        var _loop2 = function _loop2(y) {
+            var tempTile = { size: 0 };
+            floodFill(x, y, width, height, "wall", function (x, y) {
+                level[x][y] = tempTile;
+                tempTile.size++;
+            });
+        };
+
+        for (var y = 2; y < height - 2; y++) {
+            _loop2(y);
+        }
+    }for (var _x5 = 0; _x5 < width; _x5++) {
+        for (var _y2 = 0; _y2 < height; _y2++) {
+            if (level[_x5][_y2].size) {
+                level[_x5][_y2] = level[_x5][_y2].size > 5 ? "wall" : "floor";
             }
         }
     }
@@ -201,6 +246,7 @@ var createLevel = function createLevel(_ref) {
     level = create2dArray(width, height, "wall");
 
     generateFloor(width, height, prng);
+    removeIsolatedFloor(width, height);
     removeIsolatedWalls(width, height);
     convert2Tiles(width, height);
 
@@ -212,11 +258,6 @@ var populateLevel = function populateLevel(player) {
 
     return level;
 };
-
-var game$2 = 2;
-console.log(2);
-
-console.log(game$2);
 
 var playerAct = function playerAct() {
     this.display();
@@ -296,7 +337,7 @@ var createGame = (function (_ref2) {
     var seed = _ref2$seed === undefined ? 0 : _ref2$seed;
     var display = _ref2.display;
     var _ref2$width = _ref2.width;
-    var width = _ref2$width === undefined ? 40 : _ref2$width;
+    var width = _ref2$width === undefined ? 60 : _ref2$width;
     var _ref2$height = _ref2.height;
     var height = _ref2$height === undefined ? 30 : _ref2$height;
 
@@ -307,7 +348,7 @@ var createGame = (function (_ref2) {
         height: height
     };
 
-    display.setDimensions(width, height, 8, 2);
+    display.setDimensions(width, height, 16, 18, 1);
     display.load("tileset.png", startGame.bind(null, { seed: seed, width: width, height: height }));
 })
 
@@ -320,15 +361,16 @@ var prototype = {
 	// unit is the size in pixels of a tile
 	// scale scales everything up
 
-	setDimensions: function setDimensions(width, height, unit, scale) {
+	setDimensions: function setDimensions(width, height, xunit, yunit, scale) {
 		this.width = width;
 		this.height = height;
-		this.unit = unit;
+		this.xunit = xunit;
+		this.yunit = yunit;
 		this.scale = scale;
-		this.canvas.width = width * unit;
-		this.canvas.height = height * unit;
-		this.canvas.style.width = width * unit * scale + "px";
-		this.canvas.style.height = height * unit * scale + "px";
+		this.canvas.width = (width - height / 2) * xunit;
+		this.canvas.height = height * yunit;
+		this.canvas.style.width = (width - height / 2) * xunit * scale + "px";
+		this.canvas.style.height = height * yunit * scale + "px";
 	},
 
 	// load the spritesheet then call callback
@@ -345,29 +387,31 @@ var prototype = {
 
 	// draw a level
 	draw: function draw(level) {
-		var u = this.unit;
-		for (var x = 0; x < this.width; x++) {
-			for (var y = 0; y < this.height; y++) {
-				//let tile = this.cacheTile(level[x][y]);
+		this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+		var xu = this.xunit;
+		var yu = this.yunit;
+		for (var y = 0; y < this.height; y++) {
+			for (var x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 				var tile = level[x][y];
 				if (tile.actor) {
-					this.ctx.drawImage(tile.actor.canvas, 0, 0, u, u, x * u, y * u, u, u);
+					this.ctx.drawImage(tile.actor.canvas, 0, 0, xu, yu, x * xu, y * yu, xu, yu);
 				} else {
-					this.ctx.drawImage(tile.canvas, 0, 0, u, u, x * u, y * u, u, u);
+					this.ctx.drawImage(tile.canvas, 0, 0, xu, yu, (x - (this.height - y) / 2) * xu, y * yu, xu, yu);
 				}
 			}
 		}
 	},
 	cacheTile: function cacheTile(tile) {
-		var u = this.unit;
+		var xu = this.xunit;
+		var yu = this.yunit;
 		var canvas = document.createElement("canvas");
-		canvas.width = u;
-		canvas.height = u;
+		canvas.width = xu;
+		canvas.height = yu;
 		var ctx = canvas.getContext("2d");
-		ctx.drawImage(this.tileset, tile.spritex * u, tile.spritey * u, u, u, 0, 0, u, u);
+		ctx.drawImage(this.tileset, tile.spritex * xu, tile.spritey * yu, xu, yu, 0, 0, xu, yu);
 		ctx.fillStyle = colors[tile.color];
 		ctx.globalCompositeOperation = "source-in";
-		ctx.fillRect(0, 0, u, u);
+		ctx.fillRect(0, 0, xu, yu);
 		tile.canvas = canvas;
 		return tile;
 	},

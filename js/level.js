@@ -47,17 +47,40 @@ const randRange = (size, prng = Math.random) => {
 // whether point (x, y) is on the edge of the level
 const onEdge = (x, y, width, height) => x === 0 || y === 0 || x === width - 1 || y === height - 1;
 
+// whether point (x, y) is in the level
+const inBounds = (x, y, width, height) => x >= 0 && y >= 0 && x < width && y < height;
+
+const inInnerBounds = (x, y, width, height) => {
+    return x > (height - y) / 2 &&
+           x < width - 1 - y / 2 &&
+           y > 0 &&
+           y < height - 1;
+};
+
 // [xDir8[n], yDir8[n]] corresponds to one of the 8 directions in clock order
 const xDir8 = [0, 1, 1, 1, 0,-1,-1,-1];
 const yDir8 = [1, 1, 0,-1,-1,-1, 0, 1];
+
+const xDir = [0, 1, 1, 0,-1,-1];
+const yDir = [1, 0,-1,-1, 0, 1];
 
 // [xDir4[n], yDir4[n]] corresponds to one of the 4 cardinal directions in clock order
 const xDir4 = [0, 1, 0,-1];
 const yDir4 = [1, 0,-1, 0];
 
+const floodFill = (x, y, width, height, type, callback) => {
+    if (!inBounds(x, y, width, height) || level[x][y] !== type) {
+        return;
+    }
+    callback(x, y);
+    for (let i = 0; i < 6; i++) {
+        floodFill(x + xDir[i], y + yDir[i], width, height, type, callback);
+    }
+};
+
 // whether point (x, y) is surrounded by type
-const surrounded = (x, y, type, xDir = xDir8, yDir = yDir8) => {
-    for (let i = 0; i < xDir.length; i++) {
+const surrounded = (x, y, type) => {
+    for (let i = 0; i < 6; i++) {
         if (level[x + xDir[i]][y + yDir[i]] !== type) {
             return false;
         }
@@ -69,10 +92,10 @@ const surrounded = (x, y, type, xDir = xDir8, yDir = yDir8) => {
 const countGroups = (x, y) => {
     let groups = 0;
     // prev is the last tile that will be visited
-    let prev = level[x + xDir8[7]][y + yDir8[7]];
+    let prev = level[x + xDir[5]][y + yDir[5]];
     // loop through neighbors in order
-    for (let i = 0; i < 8; i++) {
-        let curr = level[x + xDir8[i]][y + yDir8[i]];
+    for (let i = 0; i < 6; i++) {
+        let curr = level[x + xDir[i]][y + yDir[i]];
         // count transitions from floor to wall
         if (prev !== "wall" && curr === "wall") {
             groups++;
@@ -88,7 +111,7 @@ const generateFloor = (width, height, prng = Math.random) => {
     // loop through the level randomly
     randRange(width * height, prng).forEach(index => {
         const [x, y] = getCoord(index, width, height);
-        if (!onEdge(x, y, width, height)) {
+        if (inInnerBounds(x, y, width, height)) {
             if (surrounded(x, y, "wall") || countGroups(x, y) !== 1) {
                 level[x][y] = "floor";
             }
@@ -96,11 +119,38 @@ const generateFloor = (width, height, prng = Math.random) => {
     });
 };
 
-// remove walls that are surrounded by floor in 4 directions
+// remove all but the largest group of floor
+const removeIsolatedFloor = (width, height) => {
+    let maxSize = 0;
+    for (let x = 1; x < width - 1; x++) for (let y = 1; y < height - 1; y++) {
+        let tempTile = { size: 0 };
+        floodFill(x, y, width, height, "floor", (x, y) => {
+            level[x][y] = tempTile;
+            tempTile.size++;
+        });
+        if (tempTile.size > maxSize) {
+            maxSize = tempTile.size;
+        }
+    }
+    for (let x = 1; x < width - 1; x++) for (let y = 1; y < height - 1; y++) {
+        if (level[x][y].size) {
+            level[x][y] = level[x][y].size === maxSize ? "floor" : "wall";
+        }
+    }
+};
+
+// remove groups of 5 or less walls
 const removeIsolatedWalls = (width, height) => {
+    for (let x = 2; x < width - 2; x++) for (let y = 2; y < height - 2; y++) {
+        let tempTile = { size: 0 };
+        floodFill(x, y, width, height, "wall", (x, y) => {
+            level[x][y] = tempTile;
+            tempTile.size++;
+        });
+    }
     for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
-        if (!onEdge(x, y, width, height) && level[x][y] === "wall" && surrounded(x, y, "floor", xDir4, yDir4)) {
-            level[x][y] = "floor";
+        if (level[x][y].size) {
+            level[x][y] = level[x][y].size > 5 ? "wall" : "floor";
         }
     }
 };
@@ -116,6 +166,7 @@ const createLevel = ({width, height, prng = Math.random}) => {
 	level = create2dArray(width, height, "wall");
 
     generateFloor(width, height, prng);
+    removeIsolatedFloor(width, height);
     removeIsolatedWalls(width, height);
     convert2Tiles(width, height);
 
