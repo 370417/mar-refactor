@@ -16,6 +16,10 @@ const prototype = {
 		this.canvas.height = height * yunit;
 		this.canvas.style.width = (width - height / 2) * xunit * scale + "px";
 		this.canvas.style.height = height * yunit * scale + "px";
+		this.bgcanvas.width = (width - height / 2) * xunit;
+		this.bgcanvas.height = height * yunit;
+		this.bgcanvas.style.width = (width - height / 2) * xunit * scale + "px";
+		this.bgcanvas.style.height = height * yunit * scale + "px";
 	},
 	// load the spritesheet then call callback
 	load(path, callback) {
@@ -25,19 +29,45 @@ const prototype = {
 	},
 	// log text to the message buffer
 	log(text) {
-		this.messages.innerHTML += text;
+		this.messages.innerHTML = text;
 	},
 	// draw a level
 	draw(level) {
-		this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+		this.drawbg(level);
+		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 		const xu = this.xunit;
 		const yu = this.yunit;
-		for (let y = 0; y < this.height; y++) for (let x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
-			let tile = level[x][y];
-			if (tile.actor) {
-				this.ctx.drawImage(tile.actor.canvas, 0, 0, xu, yu, x * xu, y * yu, xu, yu);
-			} else {
-				this.ctx.drawImage(tile.canvas, 0, 0, xu, yu, (x - (this.height - y) / 2) * xu, y * yu, xu, yu);
+		for (let y = 0; y < this.height; y++) {
+			for (let x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
+				const tile = level[x][y];
+				if (tile.visible) {
+					const realx = (x - (this.height - y) / 2) * xu;
+					const realy = y * yu;
+					tile.drawn = false;
+					this.ctx.fillStyle = "#000";
+					this.ctx.fillRect(realx, realy, xu, yu);
+					if (tile.actor) {
+						this.ctx.drawImage(tile.actor.canvas, 0, 0, xu, yu, realx, realy, xu, yu);
+					} else {
+						this.ctx.drawImage(tile.canvas, 0, 0, xu, yu, realx, realy, xu, yu);
+					}
+				}
+			}
+		}
+	},
+	drawbg(level) {
+		const xu = this.xunit;
+		const yu = this.yunit;
+		for (let y = 0; y < this.height; y++) {
+			for (let x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
+				const tile = level[x][y];
+				if (true || !tile.visible && tile.seen && !tile.drawn) {
+					const realx = (x - (this.height - y) / 2) * xu;
+					const realy = y * yu;
+					this.bgctx.clearRect(realx, realy, xu, yu);
+					this.bgctx.drawImage(tile.canvas, 0, 0, xu, yu, realx, realy, xu, yu);
+					tile.drawn = true;
+				}
 			}
 		}
 	},
@@ -59,7 +89,13 @@ const prototype = {
 		for (let x = 0; x < this.width; x++) for (let y = 0; y < this.height; y++) {
 			this.cacheTile(level[x][y]);
 		}
-	}
+	},
+	mousemove(e) {
+		const y = Math.floor((e.clientY - this.canvas.offsetTop) / this.yunit);
+		const x = Math.floor((e.clientX - this.canvas.offsetLeft) / this.xunit + (this.height - y) / 2);
+		const tile = game.level[x][y];
+		console.log(x, y, "|", tile.start, tile.end);
+	},
 };
 
 export default ({root}) => {
@@ -70,10 +106,18 @@ export default ({root}) => {
 	display.messages.setAttribute("id", "messages");
 	root.appendChild(display.messages);
 
+	// setup background canvas
+	display.bgcanvas = document.createElement("canvas");
+	display.bgcanvas.setAttribute("id", "bgcanvas");
+	root.appendChild(display.bgcanvas);
+	display.bgctx = display.bgcanvas.getContext("2d");
+
 	// setup canvas
 	display.canvas = document.createElement("canvas");
 	root.appendChild(display.canvas);
 	display.ctx = display.canvas.getContext("2d");
+
+	display.canvas.addEventListener("mousemove", display.mousemove.bind(display), false);
 
 	display.log("Loading... ");
 

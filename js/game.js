@@ -1,25 +1,28 @@
 import {createLevel, populateLevel} from "./level";
 import createActor from "./actor";
 import createSchedule from "./scheduler";
+import {keyDown} from "./input";
 
 let game;
 
-const drawLevel = _ => {
-    game.display.draw(game.currentLevel);
-};
-
 const startGame = ({seed, width, height}) => {
-    game.player = createActor("player", drawLevel, game.display.cacheTile.bind(game.display));
+    window.game = game;
+
+    game.player = createActor("player", game);
 
     game.schedule = createSchedule();
     game.schedule.add(game.player);
 
-    game.currentLevel = createLevel({width, height});
-    game.display.cacheLevel(game.currentLevel);
+    game.level = createLevel({width, height});
+    game.display.cacheLevel(game.level);
 
     populateLevel(game.player);
 
-    game.player.act();
+    // add listeners
+    window.addEventListener("keydown", keyDown.bind(null, game.player));
+
+    game.player.see();
+    game.schedule.advance().act();
 };
 
 export default ({seed = 0, display, width = 60, height = 30}) => {

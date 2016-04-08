@@ -1,4 +1,5 @@
 import createTile from "./tile";
+import fov from "./fov";
 
 let level;
 
@@ -161,6 +162,19 @@ const convert2Tiles = (width, height) => {
     }
 };
 
+const lightUp = (width, height) => {
+    for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
+        level[x][y].light = 0;
+    }
+    for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
+        if (level[x][y].transparent) {
+            fov(x, y, (x, y) => level[x][y].transparent, (x, y) => {
+                level[x][y].light++;
+            });
+        }
+    }
+};
+
 const createLevel = ({width, height, prng = Math.random}) => {
 	// create a 2d array to represent the level
 	level = create2dArray(width, height, "wall");
@@ -169,15 +183,26 @@ const createLevel = ({width, height, prng = Math.random}) => {
     removeIsolatedFloor(width, height);
     removeIsolatedWalls(width, height);
     convert2Tiles(width, height);
+    //lightUp(width, height);
 
 	return level;
 };
 
-const populateLevel = (player) => {
-    level[1][1].actor = player;
+const randomTile = (width, height, prng) => ([
+    randInt(0, width - 1, prng),
+    randInt(0, height - 1, prng),
+]);
 
+const populateLevel = (player) => {
+    let x = 0;
+    let y = 0;
+    while (level[x][y].type !== "floor") {
+        [x, y] = randomTile(level.length, level[0].length);
+    }
+    player.x = x;
+    player.y = y;
+    level[x][y].actor = player;
     return level;
 };
 
 export {createLevel, populateLevel};
-

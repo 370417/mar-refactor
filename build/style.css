@@ -4,6 +4,7 @@ body {
 }
 
 canvas {
+	position: absolute;
 	image-rendering: optimizeSpeed;            
 	image-rendering: -moz-crisp-edges;         
 	image-rendering: -o-crisp-edges;           
@@ -12,4 +13,8 @@ canvas {
 	image-rendering: crisp-edges;              
 	image-rendering: pixelated;                
 	-ms-interpolation-mode: nearest-neighbor;  
+}
+
+#bgcanvas {
+	opacity: 0.4;
 }
