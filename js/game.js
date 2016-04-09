@@ -25,7 +25,7 @@ const startGame = ({seed, width, height}) => {
     game.schedule.advance().act();
 };
 
-export default ({seed = 0, display, width = 60, height = 30}) => {
+export default ({seed = 0, display, width = 48, height = 30}) => {
     game = {
         seed,
         display,

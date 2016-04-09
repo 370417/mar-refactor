@@ -1,5 +1,6 @@
 import createTile from "./tile";
 import fov from "./fov";
+import {dijkstraMap} from "./pathfinding";
 
 let level;
 
@@ -61,13 +62,13 @@ const inInnerBounds = (x, y, width, height) => {
 const xDir = [0, 1, 1, 0,-1,-1];
 const yDir = [1, 0,-1,-1, 0, 1];
 
-const floodFill = (x, y, width, height, type, callback) => {
-    if (!inBounds(x, y, width, height) || level[x][y] !== type) {
+const floodFill = (x, y, width, height, passable, callback) => {
+    if (!inBounds(x, y, width, height) || !passable(x, y)) {
         return;
     }
     callback(x, y);
     for (let i = 0; i < 6; i++) {
-        floodFill(x + xDir[i], y + yDir[i], width, height, type, callback);
+        floodFill(x + xDir[i], y + yDir[i], width, height, passable, callback);
     }
 };
 
@@ -123,12 +124,16 @@ const generateFloor = (width, height, prng = Math.random) => {
     });
 };
 
+const isFloor = (x, y) => level[x][y] === "floor";
+
+const isWall = (x, y) => level[x][y] === "wall";
+
 // remove all but the largest group of floor
 const removeIsolatedFloor = (width, height) => {
     let maxSize = 0;
     for (let x = 1; x < width - 1; x++) for (let y = 1; y < height - 1; y++) {
         let tempTile = { size: 0 };
-        floodFill(x, y, width, height, "floor", (x, y) => {
+        floodFill(x, y, width, height, isFloor, (x, y) => {
             level[x][y] = tempTile;
             tempTile.size++;
         });
@@ -147,7 +152,7 @@ const removeIsolatedFloor = (width, height) => {
 const removeIsolatedWalls = (width, height) => {
     for (let x = 2; x < width - 2; x++) for (let y = 2; y < height - 2; y++) {
         let tempTile = { size: 0 };
-        floodFill(x, y, width, height, "wall", (x, y) => {
+        floodFill(x, y, width, height, isWall, (x, y) => {
             level[x][y] = tempTile;
             tempTile.size++;
         });
@@ -159,7 +164,7 @@ const removeIsolatedWalls = (width, height) => {
     }
 };
 
-const isDeadEnd = (x, y) => countNeighbor("floor", x, y) === 1;
+const isDeadEnd = (x, y) => level[x][y] === "floor" && countNeighbor("floor", x, y) === 1;
 
 const findDeadEnds = (width, height) => {
     for (let x = 1; x < width - 1; x++) for (let y = 1; y < height - 1; y++) {
@@ -171,10 +176,49 @@ const findDeadEnds = (width, height) => {
     }
 };
 
+const fillDeadEnds = (width, height) => {
+    for (let x = 1; x < width - 1; x++) for (let y = 1; y < height - 1; y++) {
+        if (level[x][y] === "deadEnd") {
+            level[x][y] = "wall";
+        }
+    }
+};
+
 const convert2Tiles = (width, height) => {
     for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
         level[x][y] = createTile(level[x][y]);
     }
+};
+
+const findDistanceFromWall = (width, height) => {
+    const nodes = create2dArray(width, height, () => ({}));
+
+    const ends = [];
+    for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
+        if (!level[x][y].passable) {
+            const node = nodes[x][y];
+            node.x = x;
+            node.y = y;
+            ends.push(node);
+        }
+    }
+
+    const neighbor = (node) => {
+        const neighbors = [];
+        for (let i = 0; i < 6; i++) {
+            const x = node.x + xDir[i];
+            const y = node.y + yDir[i];
+            if (inBounds(x, y, width, height)) {
+                neighbors.push(nodes[x][y]);
+            }
+        }
+        return neighbors;
+    };
+
+    const cost = () => 1;
+
+    dijkstraMap({ends, neighbor, cost});
+    console.log();
 };
 
 const normalizeLight = (maxLight, width, height) => {
@@ -209,7 +253,9 @@ const createLevel = ({width, height, prng = Math.random}) => {
     removeIsolatedFloor(width, height);
     removeIsolatedWalls(width, height);
     findDeadEnds(width, height);
+    fillDeadEnds(width, height);
     convert2Tiles(width, height);
+    findDistanceFromWall(width, height);
     lightUp(width, height);
 
 	return level;

@@ -125,7 +125,7 @@ export default (ox, oy, transparent, reveal) => {
         }
     };
 
-    [ 
+    [
         { xx:-1, xy: 1, yx: 1, yy: 0 },
         { xx: 0, xy:-1, yx: 1, yy: 0 },
         { xx: 0, xy: 1, yx: 1, yy:-1 },
