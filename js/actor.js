@@ -11,10 +11,6 @@ const see = function() {
     fov(this.x, this.y, (x, y) => game.level[x][y].transparent, (x, y, start, end) => {
         game.level[x][y].visible = true;
         game.level[x][y].seen = true;
-        game.level[x][y].start = start;
-        game.level[x][y].end = end;
-        game.display.draw(game.level);
-        alert(start + " " + end);
     });
 };
 

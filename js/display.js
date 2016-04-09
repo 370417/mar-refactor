@@ -61,7 +61,7 @@ const prototype = {
 		for (let y = 0; y < this.height; y++) {
 			for (let x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 				const tile = level[x][y];
-				if (true || !tile.visible && tile.seen && !tile.drawn) {
+				if (!tile.visible && tile.seen && !tile.drawn) {
 					const realx = (x - (this.height - y) / 2) * xu;
 					const realy = y * yu;
 					this.bgctx.clearRect(realx, realy, xu, yu);
@@ -94,7 +94,6 @@ const prototype = {
 		const y = Math.floor((e.clientY - this.canvas.offsetTop) / this.yunit);
 		const x = Math.floor((e.clientX - this.canvas.offsetLeft) / this.xunit + (this.height - y) / 2);
 		const tile = game.level[x][y];
-		console.log(x, y, "|", tile.start, tile.end);
 	},
 };
 

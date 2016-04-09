@@ -79,10 +79,11 @@ var normal = [[1, 0], // -
 [0, -1], // \
 [-1, 0], // -
 [-1, 1], // /
-[0, 1]];
+[0, 1], // \
+[1, 0]];
 
 // round a number, but round down if it ends in .5
-// \
+// -
 var roundTieDown = function roundTieDown(n) {
     return Math.ceil(n - 0.5);
 };
@@ -100,13 +101,7 @@ var fov = (function (ox, oy, transparent, reveal) {
     // radius - radius of arc
     // start & end - angles for start and end of arc
     var scan = function scan(radius, start, end) {
-        // **** means temp fix until polar2rect can be made more accurate - currently causing problems because undershooting?
-
-        if (start >= end) {
-            return;
-        }
         var someRevealed = false;
-        //let prevTransparent; // ****
 
         var _polar2rect = polar2rect(radius, start);
 
@@ -116,32 +111,28 @@ var fov = (function (ox, oy, transparent, reveal) {
         var y = _polar2rect2[1];
         var arc = _polar2rect2[2];
 
-        while (arc <= end * radius) {
+        var current = start;
+        while (current < end) {
             if (transparent(x, y)) {
-                if (arc >= start * radius && arc <= end * radius) {
-                    reveal(x, y, start, end);
+                current = arc / radius;
+                if (current >= start && current <= end) {
+                    reveal(x, y);
                     someRevealed = true;
-                    //prevTransparent = true;
                 }
             } else {
-                    reveal(x, y, start, end);
-                    someRevealed = true;
-                    //if (prevTransparent) {
-                    scan(radius + 1, start, (arc - 0.5) / radius);
-                    //}
-                    //prevTransparent = false;
-                    start = Math.max(start, (arc + 0.5) / radius);
-                    if (start >= end) {
-                        return;
-                    }
-                }
+                current = (arc + 0.5) / radius;
+                reveal(x, y);
+                someRevealed = true;
+                scan(radius + 1, start, (arc - 0.5) / radius);
+                start = current;
+            }
             // increment everything
-            x += tangent[Math.floor(arc / radius)][0];
-            y += tangent[Math.floor(arc / radius)][1];
+            var displacement = tangent[Math.floor(arc / radius)];
+            x += displacement[0];
+            y += displacement[1];
             arc++;
         }
         if (someRevealed) {
-            if (!transparent(x, y)) console.log(arc, end * radius, start, end);
             scan(radius + 1, start, end);
         }
     };
@@ -384,6 +375,36 @@ var convert2Tiles = function convert2Tiles(width, height) {
     }
 };
 
+var normalizeLight = function normalizeLight(maxLight, width, height) {
+    for (var x = 0; x < width; x++) {
+        for (var y = 0; y < height; y++) {
+            level[x][y].light /= maxLight;
+        }
+    }
+};
+
+var lightUp = function lightUp(width, height) {
+    for (var x = 0; x < width; x++) {
+        for (var y = 0; y < height; y++) {
+            level[x][y].light = 0;
+        }
+    }var maxLight = 0;
+    for (var _x6 = 0; _x6 < width; _x6++) {
+        for (var _y3 = 0; _y3 < height; _y3++) {
+            if (level[_x6][_y3].transparent) {
+                fov(_x6, _y3, function (x, y) {
+                    return level[x][y].transparent;
+                }, function (x, y) {
+                    level[x][y].light++;
+                    if (level[x][y].light > maxLight) {
+                        maxLight = level[x][y].light;
+                    }
+                });
+            }
+        }
+    }normalizeLight(maxLight, width, height);
+};
+
 var createLevel = function createLevel(_ref) {
     var width = _ref.width;
     var height = _ref.height;
@@ -397,7 +418,7 @@ var createLevel = function createLevel(_ref) {
     removeIsolatedFloor(width, height);
     removeIsolatedWalls(width, height);
     convert2Tiles(width, height);
-    //lightUp(width, height);
+    lightUp(width, height);
 
     return level;
 };
@@ -437,10 +458,6 @@ var see = function see() {
     }, function (x, y, start, end) {
         game.level[x][y].visible = true;
         game.level[x][y].seen = true;
-        game.level[x][y].start = start;
-        game.level[x][y].end = end;
-        game.display.draw(game.level);
-        alert(start + " " + end);
     });
 };
 
@@ -676,7 +693,7 @@ var prototype = {
 		for (var y = 0; y < this.height; y++) {
 			for (var x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 				var tile = level[x][y];
-				if (true || !tile.visible && tile.seen && !tile.drawn) {
+				if (!tile.visible && tile.seen && !tile.drawn) {
 					var realx = (x - (this.height - y) / 2) * xu;
 					var realy = y * yu;
 					this.bgctx.clearRect(realx, realy, xu, yu);
@@ -711,7 +728,6 @@ var prototype = {
 		var y = Math.floor((e.clientY - this.canvas.offsetTop) / this.yunit);
 		var x = Math.floor((e.clientX - this.canvas.offsetLeft) / this.xunit + (this.height - y) / 2);
 		var tile = game.level[x][y];
-		console.log(x, y, "|", tile.start, tile.end);
 	}
 };
 

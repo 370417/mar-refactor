@@ -58,16 +58,8 @@ const inInnerBounds = (x, y, width, height) => {
            y < height - 1;
 };
 
-// [xDir8[n], yDir8[n]] corresponds to one of the 8 directions in clock order
-const xDir8 = [0, 1, 1, 1, 0,-1,-1,-1];
-const yDir8 = [1, 1, 0,-1,-1,-1, 0, 1];
-
 const xDir = [0, 1, 1, 0,-1,-1];
 const yDir = [1, 0,-1,-1, 0, 1];
-
-// [xDir4[n], yDir4[n]] corresponds to one of the 4 cardinal directions in clock order
-const xDir4 = [0, 1, 0,-1];
-const yDir4 = [1, 0,-1, 0];
 
 const floodFill = (x, y, width, height, type, callback) => {
     if (!inBounds(x, y, width, height) || level[x][y] !== type) {
@@ -105,6 +97,17 @@ const countGroups = (x, y) => {
     }
     // if there are no transitions, check if all neighbors are walls
     return !groups && prev === "wall" ? 1 : groups;
+};
+
+// count the number of neighboring tiles of a certain type
+const countNeighbor = (type, x, y) => {
+    let count = 0;
+    for (let i = 0; i < 6; i++) {
+        if (level[x + xDir[i]][y + yDir[i]] === type) {
+            count++;
+        }
+    }
+    return count;
 };
 
 // generate floor in the level to create caves
@@ -156,9 +159,27 @@ const removeIsolatedWalls = (width, height) => {
     }
 };
 
+const isDeadEnd = (x, y) => countNeighbor("floor", x, y) === 1;
+
+const findDeadEnds = (width, height) => {
+    for (let x = 1; x < width - 1; x++) for (let y = 1; y < height - 1; y++) {
+        if (level[x][y] === "floor" && isDeadEnd(x, y)) {
+            floodFill(x, y, width, height, isDeadEnd, (x, y) => {
+                level[x][y] = "deadEnd";
+            });
+        }
+    }
+};
+
 const convert2Tiles = (width, height) => {
     for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
         level[x][y] = createTile(level[x][y]);
+    }
+};
+
+const normalizeLight = (maxLight, width, height) => {
+    for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
+        level[x][y].light /= maxLight;
     }
 };
 
@@ -166,13 +187,18 @@ const lightUp = (width, height) => {
     for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
         level[x][y].light = 0;
     }
+    let maxLight = 0;
     for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
         if (level[x][y].transparent) {
             fov(x, y, (x, y) => level[x][y].transparent, (x, y) => {
                 level[x][y].light++;
+                if (level[x][y].light > maxLight) {
+                    maxLight = level[x][y].light;
+                }
             });
         }
     }
+    normalizeLight(maxLight, width, height);
 };
 
 const createLevel = ({width, height, prng = Math.random}) => {
@@ -182,8 +208,9 @@ const createLevel = ({width, height, prng = Math.random}) => {
     generateFloor(width, height, prng);
     removeIsolatedFloor(width, height);
     removeIsolatedWalls(width, height);
+    findDeadEnds(width, height);
     convert2Tiles(width, height);
-    //lightUp(width, height);
+    lightUp(width, height);
 
 	return level;
 };

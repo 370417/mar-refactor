@@ -30,6 +30,7 @@ const normal = [
     [-1, 0],// -
     [-1, 1],// /
     [ 0, 1],// \
+    [ 1, 0],// -
 ];
 
 // round a number, but round down if it ends in .5
@@ -52,38 +53,30 @@ export default (ox, oy, transparent, reveal) => {
     // radius - radius of arc
     // start & end - angles for start and end of arc
     const scan = (radius, start, end) => {
-        // **** means temp fix until polar2rect can be made more accurate - currently causing problems because undershooting?
-
-        if (start >= end) {
-            return;
-        }
         let someRevealed = false;
-        //let prevTransparent; // ****
         let [x, y, arc] = polar2rect(radius, start);
-        while (arc <= end * radius) {
+        let current = start;
+        while (current < end) {
             if (transparent(x, y)) {
-                if (arc >= start * radius && arc <= end * radius) {
-                    reveal(x, y, start, end);
+                current = arc / radius;
+                if (current >= start && current <= end) {
+                    reveal(x, y);
                     someRevealed = true;
-                    //prevTransparent = true;
                 }
             } else {
-                reveal(x, y, start, end);
+                current = (arc + 0.5) / radius;
+                reveal(x, y);
                 someRevealed = true;
-                //if (prevTransparent) {
-                    scan(radius + 1, start, (arc - 0.5) / radius);
-                //}
-                //prevTransparent = false;
-                start = Math.max(start, (arc + 0.5) / radius);
-                if (start >= end) { return; }
+                scan(radius + 1, start, (arc - 0.5) / radius);
+                start = current;
             }
             // increment everything
-            x += tangent[Math.floor(arc / radius)][0];
-            y += tangent[Math.floor(arc / radius)][1];
+            const displacement = tangent[Math.floor(arc / radius)];
+            x += displacement[0];
+            y += displacement[1];
             arc++;
         }
         if (someRevealed) {
-            if (!transparent(x, y)) console.log(arc, end * radius, start, end);
             scan(radius + 1, start, end);
         }
     }
