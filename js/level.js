@@ -1,5 +1,5 @@
 import createTile from "./tile";
-import fov from "./fov";
+import {fov} from "./fov";
 import {dijkstraMap} from "./pathfinding";
 
 let level;
@@ -11,16 +11,16 @@ const create2dArray = (width, height, content) => {
     for (let x = 0; x < width; x++) {
         array[x] = [];
         for (let y = 0; y < height; y++) {
-            array[x][y] = isFunction ? content() : content;
+            array[x][y] = isFunction ? content(x, y) : content;
         }
     }
     return array;
 };
 
 // get the 2d coordinates like array[x][y] corresponding to a 1d index
-const getCoord = (index, width, height) => {
-    const y = index % height;
-    const x = (index - y) / height;
+const getCoord = (index) => {
+    const y = index % level.height;
+    const x = (index - y) / level.height;
     return [x, y];
 };
 
@@ -47,28 +47,28 @@ const randRange = (size, prng = Math.random) => {
 };
 
 // whether point (x, y) is on the edge of the level
-const onEdge = (x, y, width, height) => x === 0 || y === 0 || x === width - 1 || y === height - 1;
+const onEdge = (x, y) => x === 0 || y === 0 || x === level.width - 1 || y === level.height - 1;
 
 // whether point (x, y) is in the level
-const inBounds = (x, y, width, height) => x >= 0 && y >= 0 && x < width && y < height;
+const inBounds = (x, y) => x >= 0 && y >= 0 && x < level.width && y < level.height;
 
-const inInnerBounds = (x, y, width, height) => {
-    return x > (height - y) / 2 &&
-           x < width - 1 - y / 2 &&
+const inInnerBounds = (x, y) => {
+    return x > (level.height - y) / 2 &&
+           x < level.width - 1 - y / 2 &&
            y > 0 &&
-           y < height - 1;
+           y < level.height - 1;
 };
 
 const xDir = [0, 1, 1, 0,-1,-1];
 const yDir = [1, 0,-1,-1, 0, 1];
 
-const floodFill = (x, y, width, height, passable, callback) => {
-    if (!inBounds(x, y, width, height) || !passable(x, y)) {
+const floodFill = (x, y, passable, callback) => {
+    if (!inBounds(x, y) || !passable(x, y)) {
         return;
     }
     callback(x, y);
     for (let i = 0; i < 6; i++) {
-        floodFill(x + xDir[i], y + yDir[i], width, height, passable, callback);
+        floodFill(x + xDir[i], y + yDir[i], passable, callback);
     }
 };
 
@@ -112,11 +112,11 @@ const countNeighbor = (type, x, y) => {
 };
 
 // generate floor in the level to create caves
-const generateFloor = (width, height, prng = Math.random) => {
+const generateFloor = (prng = Math.random) => {
     // loop through the level randomly
-    randRange(width * height, prng).forEach(index => {
-        const [x, y] = getCoord(index, width, height);
-        if (inInnerBounds(x, y, width, height)) {
+    randRange(level.width * level.height, prng).forEach(index => {
+        const [x, y] = getCoord(index);
+        if (inInnerBounds(x, y)) {
             if (surrounded(x, y, "wall") || countGroups(x, y) !== 1) {
                 level[x][y] = "floor";
             }
@@ -129,11 +129,11 @@ const isFloor = (x, y) => level[x][y] === "floor";
 const isWall = (x, y) => level[x][y] === "wall";
 
 // remove all but the largest group of floor
-const removeIsolatedFloor = (width, height) => {
+const removeIsolatedFloor = () => {
     let maxSize = 0;
-    for (let x = 1; x < width - 1; x++) for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < level.width - 1; x++) for (let y = 1; y < level.height - 1; y++) {
         let tempTile = { size: 0 };
-        floodFill(x, y, width, height, isFloor, (x, y) => {
+        floodFill(x, y, isFloor, (x, y) => {
             level[x][y] = tempTile;
             tempTile.size++;
         });
@@ -141,7 +141,7 @@ const removeIsolatedFloor = (width, height) => {
             maxSize = tempTile.size;
         }
     }
-    for (let x = 1; x < width - 1; x++) for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < level.width - 1; x++) for (let y = 1; y < level.height - 1; y++) {
         if (level[x][y].size) {
             level[x][y] = level[x][y].size === maxSize ? "floor" : "wall";
         }
@@ -149,15 +149,15 @@ const removeIsolatedFloor = (width, height) => {
 };
 
 // remove groups of 5 or less walls
-const removeIsolatedWalls = (width, height) => {
-    for (let x = 2; x < width - 2; x++) for (let y = 2; y < height - 2; y++) {
+const removeIsolatedWalls = () => {
+    for (let x = 2; x < level.width - 2; x++) for (let y = 2; y < level.height - 2; y++) {
         let tempTile = { size: 0 };
-        floodFill(x, y, width, height, isWall, (x, y) => {
+        floodFill(x, y, isWall, (x, y) => {
             level[x][y] = tempTile;
             tempTile.size++;
         });
     }
-    for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
+    for (let x = 0; x < level.width; x++) for (let y = 0; y < level.height; y++) {
         if (level[x][y].size) {
             level[x][y] = level[x][y].size > 5 ? "wall" : "floor";
         }
@@ -166,49 +166,41 @@ const removeIsolatedWalls = (width, height) => {
 
 const isDeadEnd = (x, y) => level[x][y] === "floor" && countNeighbor("floor", x, y) === 1;
 
-const findDeadEnds = (width, height) => {
-    for (let x = 1; x < width - 1; x++) for (let y = 1; y < height - 1; y++) {
+const findDeadEnds = () => {
+    for (let x = 1; x < level.width - 1; x++) for (let y = 1; y < level.height - 1; y++) {
         if (level[x][y] === "floor" && isDeadEnd(x, y)) {
-            floodFill(x, y, width, height, isDeadEnd, (x, y) => {
+            floodFill(x, y, isDeadEnd, (x, y) => {
                 level[x][y] = "deadEnd";
             });
         }
     }
 };
 
-const fillDeadEnds = (width, height) => {
-    for (let x = 1; x < width - 1; x++) for (let y = 1; y < height - 1; y++) {
+const fillDeadEnds = () => {
+    for (let x = 1; x < level.width - 1; x++) for (let y = 1; y < level.height - 1; y++) {
         if (level[x][y] === "deadEnd") {
             level[x][y] = "wall";
         }
     }
 };
 
-const convert2Tiles = (width, height) => {
-    for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
+const convert2Tiles = () => {
+    for (let x = 0; x < level.width; x++) for (let y = 0; y < level.height; y++) {
         level[x][y] = createTile(level[x][y]);
     }
 };
 
-const findDistanceFromWall = (width, height) => {
-    const nodes = create2dArray(width, height, () => ({}));
+const findDistanceFromWall = () => {
+    const nodes = create2dArray(level.width, level.height, (x, y) => ({ x, y, end: !level[x][y].passable }));
 
-    const ends = [];
-    for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
-        if (!level[x][y].passable) {
-            const node = nodes[x][y];
-            node.x = x;
-            node.y = y;
-            ends.push(node);
-        }
-    }
+    const end = node => node.end;
 
-    const neighbor = (node) => {
+    const neighbor = node => {
         const neighbors = [];
         for (let i = 0; i < 6; i++) {
             const x = node.x + xDir[i];
             const y = node.y + yDir[i];
-            if (inBounds(x, y, width, height)) {
+            if (inBounds(x, y)) {
                 neighbors.push(nodes[x][y]);
             }
         }
@@ -217,22 +209,33 @@ const findDistanceFromWall = (width, height) => {
 
     const cost = () => 1;
 
-    dijkstraMap({ends, neighbor, cost});
-    console.log();
+    // flat array of nodes
+    const graph = [];
+    for (let x = 0, i = 0; x < level.width; x++) for (let y = 0; y < level.height; y++, i++) {
+        graph[i] = nodes[x][y];
+    }
+
+    const map = dijkstraMap({graph, end, neighbor, cost});
+
+    map.forEach(node => {
+        if (node.cost > 1) {
+            //level[node.x][node.y] = createTile("wall");
+        }
+    });
 };
 
-const normalizeLight = (maxLight, width, height) => {
-    for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
+const normalizeLight = (maxLight) => {
+    for (let x = 0; x < level.width; x++) for (let y = 0; y < level.height; y++) {
         level[x][y].light /= maxLight;
     }
 };
 
-const lightUp = (width, height) => {
-    for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
+const lightUp = () => {
+    for (let x = 0; x < level.width; x++) for (let y = 0; y < level.height; y++) {
         level[x][y].light = 0;
     }
     let maxLight = 0;
-    for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
+    for (let x = 0; x < level.width; x++) for (let y = 0; y < level.height; y++) {
         if (level[x][y].transparent) {
             fov(x, y, (x, y) => level[x][y].transparent, (x, y) => {
                 level[x][y].light++;
@@ -242,21 +245,23 @@ const lightUp = (width, height) => {
             });
         }
     }
-    normalizeLight(maxLight, width, height);
+    normalizeLight(maxLight);
 };
 
 const createLevel = ({width, height, prng = Math.random}) => {
 	// create a 2d array to represent the level
 	level = create2dArray(width, height, "wall");
+    level.width = width;
+    level.height = height;
 
-    generateFloor(width, height, prng);
-    removeIsolatedFloor(width, height);
-    removeIsolatedWalls(width, height);
-    findDeadEnds(width, height);
-    fillDeadEnds(width, height);
-    convert2Tiles(width, height);
-    findDistanceFromWall(width, height);
-    lightUp(width, height);
+    generateFloor(prng);
+    removeIsolatedFloor();
+    removeIsolatedWalls();
+    findDeadEnds();
+    fillDeadEnds();
+    convert2Tiles();
+    findDistanceFromWall();
+    lightUp();
 
 	return level;
 };
@@ -266,11 +271,13 @@ const randomTile = (width, height, prng) => ([
     randInt(0, height - 1, prng),
 ]);
 
-const populateLevel = (player) => {
-    let x = 0;
-    let y = 0;
-    while (level[x][y].type !== "floor") {
-        [x, y] = randomTile(level.length, level[0].length);
+const populateLevel = (player, x, y) => {
+    if (x === undefined) {
+        x = 0;
+        y = 0;
+        while (!level[x][y].passable) {
+            [x, y] = randomTile(level.width, level.height);
+        }
     }
     player.x = x;
     player.y = y;
@@ -278,4 +285,21 @@ const populateLevel = (player) => {
     return level;
 };
 
-export {createLevel, populateLevel};
+const available = (x, y) => {
+    return level[x][y].passable && level[x][y].actor === undefined;
+};
+
+const addStairs = () => {
+    let x = 0;
+    let y = 0;
+    while (!available(x, y)) {
+        [x, y] = randomTile(level.width, level.height);
+    }
+    
+};
+
+const addItems = () => {
+    addStairs();
+};
+
+export {createLevel, populateLevel, addItems};

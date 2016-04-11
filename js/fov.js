@@ -1,12 +1,53 @@
-/*   1
-   _____
-2 /\___/\ 0
- / /\ /\ \
-|-|--@--|-|
- \ \/_\/ /
-3 \/___\/ 5
-     4
-*/
+const cubeDistance = (x1, y1, z1, x2, y2, z2) =>
+    Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2), Math.abs(z1 - z2));
+
+const cubeRound = ({x, y, z}) => {
+    let [rx, ry, rz] = [x, y, z].map(Math.round);
+
+    let [dx, dy, dz] = [rx - x, ry - y, rz - z].map(Math.abs);
+
+    if (dx > dy && dx > dz) {
+        rx = -ry - rz;
+    } else if (dy > dz) {
+        ry = -rx - rz;
+    } else {
+        rz = -rx - ry;
+    }
+    return { x: rx, y: ry, z: rz };
+};
+
+const line = (x1, y1, x2, y2, callback, skip = 0) => {
+    const z1 = -x1 - y1;
+    const z2 = -x2 - y2;
+    const dist = cubeDistance(x1, y1, z1, x2, y2, z2);
+    let [x, y, z] = [x1, y1, z1];
+    const [dx, dy, dz] = [x2 - x1, y2 - y1, z2 - z1].map(n => n / dist);
+    for (let i = 0; i <= dist; i++) {
+        if (i >= skip && callback(cubeRound({x, y, z}))) { break; }
+        x += dx;
+        y += dy;
+        z += dz;
+    }
+};
+
+const newfov = (ox, oy, width, height, transparent, reveal) => {
+    reveal(ox, oy);
+
+    const callback = ({x, y}) => {
+        reveal(x, y);
+        return !transparent(x, y);
+    };
+
+    for (let x = Math.floor(height / 2); x < width; x++) {
+        line(ox, oy, x, 0, callback, 1);
+        line(ox, oy, x - Math.floor(height / 2), height - 1, callback, 1);
+    }
+
+    for (let y = 0; y < height; y++) {
+        line(ox, oy, Math.floor((height - y) / 2), y, callback, 1);
+        line(ox, oy, width - Math.floor(y / 2), y, callback, 1);
+    }
+};
 
 const xDir = [0, 1, 1, 0,-1,-1];
 const yDir = [1, 0,-1,-1, 0, 1];
@@ -36,8 +77,18 @@ const normal = [
 // round a number, but round down if it ends in .5
 const roundTieDown = n => Math.ceil(n - 0.5);
 
-export default (ox, oy, transparent, reveal) => {
+const fov = (ox, oy, transparent, reveal) => {
     reveal(ox, oy);
+
+    const revealWall = (x, y) => {
+        if (!transparent(x, y)) {
+            reveal(x, y);
+        }
+    };
+
+    for (let i = 0; i < 6; i++) {
+        revealWall(ox + normal[i][0], oy + normal[i][1]);
+    }
 
     const polar2rect = (radius, angle) => {
         const sector = Math.floor(angle);
@@ -62,12 +113,30 @@ export default (ox, oy, transparent, reveal) => {
                 if (current >= start && current <= end) {
                     reveal(x, y);
                     someRevealed = true;
+                    if (current >= 0 && current <= 2) {
+                        revealWall(x + 1, y - 1);
+                    }
+                    if (current >= 1 && current <= 3) {
+                        revealWall(x, y - 1);
+                    }
+                    if (current >= 2 && current <= 4) {
+                        revealWall(x - 1, y);
+                    }
+                    if (current >= 3 && current <= 5) {
+                        revealWall(x - 1, y + 1);
+                    }
+                    if (current >= 4 && current <= 6) {
+                        revealWall(x, y + 1);
+                    }
+                    if (current <= 1 || current >= 5) {
+                        revealWall(x + 1, y);
+                    }
                 }
             } else {
                 current = (arc + 0.5) / radius;
-                reveal(x, y);
-                someRevealed = true;
-                scan(radius + 1, start, (arc - 0.5) / radius);
+                if (someRevealed) {
+                    scan(radius + 1, start, (arc - 0.5) / radius);
+                }
                 start = current;
             }
             // increment everything
@@ -83,61 +152,4 @@ export default (ox, oy, transparent, reveal) => {
     scan(1, 0, 6);
 };
 
-/*
-export default (ox, oy, transparent, reveal) => {
-    reveal(ox, oy);
-
-    const rotate = ([x, y], transform) => ([
-        ox + x * transform.xx + y * transform.yx,
-        oy + x * transform.xy + y * transform.yy,
-    ]);
-
-    const scan = (y, start, end, transform) => {
-        if (start >= end) {
-            return;
-        }
-        let someTilesRevealed = false;
-        const xmin = Math.round((y - 0.5) * start);
-        const xmax = Math.ceil((y + 0.5) * end - 0.5);
-        for (let x = xmin; x <= xmax; x++) {
-            const [realx, realy] = rotate([x, y], transform);
-            const currTransparent = transparent(realx, realy);
-            if (currTransparent) {
-                if (x >= y * start && x <= y * end) {
-                    reveal(realx, realy);
-                    someTilesRevealed = true;
-                }
-            } else {
-                //if (x >= (y - 0.5) * start && x - 0.5 <= y * end) {
-                //if (x >= y * start && x <= y * end) {
-                    reveal(realx, realy);
-                    someTilesRevealed = true;
-                //}
-                scan(y + 1, start, (x - 0.5) / (y + 0.5), transform);
-                start = (x + 0.5) / (y - 0.5);
-                if (start >= end) {
-                    return;
-                }
-            }
-        }
-        if (someTilesRevealed) {
-            scan(y + 1, start, end, transform);
-        }
-    };
-
-    [
-        { xx:-1, xy: 1, yx: 1, yy: 0 },
-        { xx: 0, xy:-1, yx: 1, yy: 0 },
-        { xx: 0, xy: 1, yx: 1, yy:-1 },
-        { xx:-1, xy: 0, yx: 1, yy:-1 },
-        { xx: 1, xy: 0, yx: 0, yy:-1 },
-        { xx:-1, xy: 1, yx: 0, yy:-1 },
-        { xx: 1, xy:-1, yx:-1, yy: 0 },
-        { xx: 0, xy: 1, yx:-1, yy: 0 },
-        { xx: 0, xy:-1, yx:-1, yy: 1 },
-        { xx: 1, xy: 0, yx:-1, yy: 1 },
-        { xx:-1, xy: 0, yx: 0, yy: 1 },
-        { xx: 1, xy:-1, yx: 0, yy: 1 },
-    ].forEach(scan.bind(null, 1, 0, 0.5));
-};
-*/
+export {fov};

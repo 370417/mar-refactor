@@ -1,17 +1,25 @@
-import fov from "./fov";
+import {fov} from "./fov";
+
+/*const angle = (x1, y1, x2 = 1, y2 = 0) => {
+    let l1 = Math.sqrt(x1 * x1 + y1 * y1);
+    let l2 = Math.sqrt(x2 * x2 + y2 * y2);
+    return Math.acos((x1 * x2 + y1 * y2) / (l1 * l2));
+}*/
 
 const playerAct = function() {
     game.display.draw(game.level);
 };
 
 const see = function() {
+    const reveal = (x, y) => {
+        game.level[x][y].visible = true;
+        game.level[x][y].seen = true;
+    };
+
     for (let x = 0; x < game.width; x++) for (let y = 0; y < game.height; y++) {
         game.level[x][y].visible = false;
     }
-    fov(this.x, this.y, (x, y) => game.level[x][y].transparent, (x, y, start, end) => {
-        game.level[x][y].visible = true;
-        game.level[x][y].seen = true;
-    });
+    fov(this.x, this.y, (x, y) => game.level[x][y].transparent, reveal);
 };
 
 const move = function([dx, dy]) {

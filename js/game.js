@@ -1,4 +1,4 @@
-import {createLevel, populateLevel} from "./level";
+import {createLevel, populateLevel, addItems} from "./level";
 import createActor from "./actor";
 import createSchedule from "./scheduler";
 import {keyDown} from "./input";
@@ -17,6 +17,7 @@ const startGame = ({seed, width, height}) => {
     game.display.cacheLevel(game.level);
 
     populateLevel(game.player);
+    addItems();
 
     // add listeners
     window.addEventListener("keydown", keyDown.bind(null, game.player));

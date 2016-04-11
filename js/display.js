@@ -1,7 +1,3 @@
-const colors = {
-	white: "#FFF"
-};
-
 const prototype = {
 	// set the dimensions of the dislpay
 	// unit is the size in pixels of a tile
@@ -79,7 +75,7 @@ const prototype = {
 		canvas.height = yu;
 		const ctx = canvas.getContext("2d");
 		ctx.drawImage(this.tileset, tile.spritex * xu, tile.spritey * yu, xu, yu, 0, 0, xu, yu);
-        ctx.fillStyle = colors[tile.color];
+        ctx.fillStyle = tile.color;
         ctx.globalCompositeOperation = "source-in";
         ctx.fillRect(0, 0, xu, yu);
 		tile.canvas = canvas;
@@ -87,7 +83,9 @@ const prototype = {
 	},
 	cacheLevel(level) {
 		for (let x = 0; x < this.width; x++) for (let y = 0; y < this.height; y++) {
-			this.cacheTile(level[x][y]);
+            const tile = level[x][y];
+            tile.color = tile.litColor(tile.light);
+			this.cacheTile(tile);
 		}
 	},
 	mousemove(e) {

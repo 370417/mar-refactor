@@ -44,27 +44,40 @@ babelHelpers;
 var __commonjs_global = typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : this;
 function __commonjs(fn, module) { return module = { exports: {} }, fn(module, module.exports, __commonjs_global), module.exports; }
 
+var arr2hsl = function arr2hsl(_ref3) {
+    var _ref4 = babelHelpers.slicedToArray(_ref3, 3);
+
+    var h = _ref4[0];
+    var s = _ref4[1];
+    var l = _ref4[2];
+    return "hsl(" + h + "," + s + "%," + l + "%)";
+};
+
 var Tiles = {
-  wall: {
-    type: "wall",
-    passable: false,
-    transparent: false,
-    color: "white",
-    spritex: 0,
-    spritey: 0
-  },
-  floor: {
-    type: "floor",
-    passable: true,
-    transparent: true,
-    color: "white",
-    spritex: 1,
-    spritey: 0
-  }
+    wall: {
+        type: "wall",
+        passable: false,
+        transparent: false,
+        spritex: 0,
+        spritey: 0,
+        litColor: function litColor(light) {
+            return arr2hsl([40, Math.round(10 * light), 60 + Math.round(20 * light)]);
+        }
+    },
+    floor: {
+        type: "floor",
+        passable: true,
+        transparent: true,
+        spritex: 1,
+        spritey: 0,
+        litColor: function litColor(light) {
+            return arr2hsl([0, 0, 40 + Math.round(60 * light)]);
+        }
+    }
 };
 
 var createTile = (function (name) {
-  return Object.create(Tiles[name]);
+    return Object.create(Tiles[name]);
 })
 
 // displacement vector for moving tangent to a circle counterclockwise in a certain sector
@@ -92,8 +105,18 @@ var roundTieDown = function roundTieDown(n) {
     return Math.ceil(n - 0.5);
 };
 
-var fov = (function (ox, oy, transparent, reveal) {
+var fov = function fov(ox, oy, transparent, reveal) {
     reveal(ox, oy);
+
+    var revealWall = function revealWall(x, y) {
+        if (!transparent(x, y)) {
+            reveal(x, y);
+        }
+    };
+
+    for (var i = 0; i < 6; i++) {
+        revealWall(ox + normal[i][0], oy + normal[i][1]);
+    }
 
     var polar2rect = function polar2rect(radius, angle) {
         var sector = Math.floor(angle);
@@ -122,12 +145,30 @@ var fov = (function (ox, oy, transparent, reveal) {
                 if (current >= start && current <= end) {
                     reveal(x, y);
                     someRevealed = true;
+                    if (current >= 0 && current <= 2) {
+                        revealWall(x + 1, y - 1);
+                    }
+                    if (current >= 1 && current <= 3) {
+                        revealWall(x, y - 1);
+                    }
+                    if (current >= 2 && current <= 4) {
+                        revealWall(x - 1, y);
+                    }
+                    if (current >= 3 && current <= 5) {
+                        revealWall(x - 1, y + 1);
+                    }
+                    if (current >= 4 && current <= 6) {
+                        revealWall(x, y + 1);
+                    }
+                    if (current <= 1 || current >= 5) {
+                        revealWall(x + 1, y);
+                    }
                 }
             } else {
                 current = (arc + 0.5) / radius;
-                reveal(x, y);
-                someRevealed = true;
-                scan(radius + 1, start, (arc - 0.5) / radius);
+                if (someRevealed) {
+                    scan(radius + 1, start, (arc - 0.5) / radius);
+                }
                 start = current;
             }
             // increment everything
@@ -141,66 +182,7 @@ var fov = (function (ox, oy, transparent, reveal) {
         }
     };
     scan(1, 0, 6);
-})
-
-/*
-export default (ox, oy, transparent, reveal) => {
-    reveal(ox, oy);
-
-    const rotate = ([x, y], transform) => ([
-        ox + x * transform.xx + y * transform.yx,
-        oy + x * transform.xy + y * transform.yy,
-    ]);
-
-    const scan = (y, start, end, transform) => {
-        if (start >= end) {
-            return;
-        }
-        let someTilesRevealed = false;
-        const xmin = Math.round((y - 0.5) * start);
-        const xmax = Math.ceil((y + 0.5) * end - 0.5);
-        for (let x = xmin; x <= xmax; x++) {
-            const [realx, realy] = rotate([x, y], transform);
-            const currTransparent = transparent(realx, realy);
-            if (currTransparent) {
-                if (x >= y * start && x <= y * end) {
-                    reveal(realx, realy);
-                    someTilesRevealed = true;
-                }
-            } else {
-                //if (x >= (y - 0.5) * start && x - 0.5 <= y * end) {
-                //if (x >= y * start && x <= y * end) {
-                    reveal(realx, realy);
-                    someTilesRevealed = true;
-                //}
-                scan(y + 1, start, (x - 0.5) / (y + 0.5), transform);
-                start = (x + 0.5) / (y - 0.5);
-                if (start >= end) {
-                    return;
-                }
-            }
-        }
-        if (someTilesRevealed) {
-            scan(y + 1, start, end, transform);
-        }
-    };
-
-    [
-        { xx:-1, xy: 1, yx: 1, yy: 0 },
-        { xx: 0, xy:-1, yx: 1, yy: 0 },
-        { xx: 0, xy: 1, yx: 1, yy:-1 },
-        { xx:-1, xy: 0, yx: 1, yy:-1 },
-        { xx: 1, xy: 0, yx: 0, yy:-1 },
-        { xx:-1, xy: 1, yx: 0, yy:-1 },
-        { xx: 1, xy:-1, yx:-1, yy: 0 },
-        { xx: 0, xy: 1, yx:-1, yy: 0 },
-        { xx: 0, xy:-1, yx:-1, yy: 1 },
-        { xx: 1, xy: 0, yx:-1, yy: 1 },
-        { xx:-1, xy: 0, yx: 0, yy: 1 },
-        { xx: 1, xy:-1, yx: 0, yy: 1 },
-    ].forEach(scan.bind(null, 1, 0, 0.5));
 };
-*/
 
 var heap = __commonjs(function (module, exports, global) {
 // Generated by CoffeeScript 1.8.0
@@ -588,25 +570,46 @@ module.exports = require$$0;
 
 var Heap = (index && typeof index === 'object' && 'default' in index ? index['default'] : index);
 
-console.log(Heap);
-
-// ends - an array of end nodes
+// graph - an array of nodes
+// end(node) - returns true if node is an end node
 // neighbor(node) - returns an array of neighbors of a node
 // cost(node1, node2) - returns the cost to move from node1 to node2
 var dijkstraMap = function dijkstraMap(_ref) {
-    var ends = _ref.ends;
+    var graph = _ref.graph;
+    var end = _ref.end;
     var neighbor = _ref.neighbor;
     var cost = _ref.cost;
 
-    var active = new Heap(function (a, b) {
+    var unvisited = new Heap(function (a, b) {
         return a.cost - b.cost;
     });
 
-    for (var i = 0; i < ends.length; i++) {
-        ends[i].cost = 0;
+    for (var i = 0; i < graph.length; i++) {
+        var node = graph[i];
+        node.cost = end(node) ? 0 : Infinity;
+        unvisited.push(node);
     }
-    console.log(active);
-    //while () {}
+
+    var _loop = function _loop() {
+        var node = unvisited.pop();
+        node.visited = true;
+        neighbor(node).forEach(function (neighbor) {
+            if (neighbor.visited) {
+                return;
+            }
+            var altCost = node.cost + cost(node, neighbor);
+            if (altCost < neighbor.cost) {
+                neighbor.cost = altCost;
+                neighbor.prev = node;
+            }
+        });
+    };
+
+    while (unvisited.peek()) {
+        _loop();
+    }
+
+    return graph;
 };
 
 var level = void 0;
@@ -618,16 +621,16 @@ var create2dArray = function create2dArray(width, height, content) {
     for (var x = 0; x < width; x++) {
         array[x] = [];
         for (var y = 0; y < height; y++) {
-            array[x][y] = isFunction ? content() : content;
+            array[x][y] = isFunction ? content(x, y) : content;
         }
     }
     return array;
 };
 
 // get the 2d coordinates like array[x][y] corresponding to a 1d index
-var getCoord = function getCoord(index, width, height) {
-    var y = index % height;
-    var x = (index - y) / height;
+var getCoord = function getCoord(index) {
+    var y = index % level.height;
+    var x = (index - y) / level.height;
     return [x, y];
 };
 
@@ -658,24 +661,24 @@ var randRange = function randRange(size) {
 };
 
 // whether point (x, y) is in the level
-var inBounds = function inBounds(x, y, width, height) {
-    return x >= 0 && y >= 0 && x < width && y < height;
+var inBounds = function inBounds(x, y) {
+    return x >= 0 && y >= 0 && x < level.width && y < level.height;
 };
 
-var inInnerBounds = function inInnerBounds(x, y, width, height) {
-    return x > (height - y) / 2 && x < width - 1 - y / 2 && y > 0 && y < height - 1;
+var inInnerBounds = function inInnerBounds(x, y) {
+    return x > (level.height - y) / 2 && x < level.width - 1 - y / 2 && y > 0 && y < level.height - 1;
 };
 
 var xDir = [0, 1, 1, 0, -1, -1];
 var yDir = [1, 0, -1, -1, 0, 1];
 
-var floodFill = function floodFill(x, y, width, height, passable, callback) {
-    if (!inBounds(x, y, width, height) || !passable(x, y)) {
+var floodFill = function floodFill(x, y, passable, callback) {
+    if (!inBounds(x, y) || !passable(x, y)) {
         return;
     }
     callback(x, y);
     for (var i = 0; i < 6; i++) {
-        floodFill(x + xDir[i], y + yDir[i], width, height, passable, callback);
+        floodFill(x + xDir[i], y + yDir[i], passable, callback);
     }
 };
 
@@ -719,19 +722,19 @@ var countNeighbor = function countNeighbor(type, x, y) {
 };
 
 // generate floor in the level to create caves
-var generateFloor = function generateFloor(width, height) {
-    var prng = arguments.length <= 2 || arguments[2] === undefined ? Math.random : arguments[2];
+var generateFloor = function generateFloor() {
+    var prng = arguments.length <= 0 || arguments[0] === undefined ? Math.random : arguments[0];
 
     // loop through the level randomly
-    randRange(width * height, prng).forEach(function (index) {
-        var _getCoord = getCoord(index, width, height);
+    randRange(level.width * level.height, prng).forEach(function (index) {
+        var _getCoord = getCoord(index);
 
         var _getCoord2 = babelHelpers.slicedToArray(_getCoord, 2);
 
         var x = _getCoord2[0];
         var y = _getCoord2[1];
 
-        if (inInnerBounds(x, y, width, height)) {
+        if (inInnerBounds(x, y)) {
             if (surrounded(x, y, "wall") || countGroups(x, y) !== 1) {
                 level[x][y] = "floor";
             }
@@ -748,12 +751,12 @@ var isWall = function isWall(x, y) {
 };
 
 // remove all but the largest group of floor
-var removeIsolatedFloor = function removeIsolatedFloor(width, height) {
+var removeIsolatedFloor = function removeIsolatedFloor() {
     var maxSize = 0;
-    for (var x = 1; x < width - 1; x++) {
+    for (var x = 1; x < level.width - 1; x++) {
         var _loop = function _loop(y) {
             var tempTile = { size: 0 };
-            floodFill(x, y, width, height, isFloor, function (x, y) {
+            floodFill(x, y, isFloor, function (x, y) {
                 level[x][y] = tempTile;
                 tempTile.size++;
             });
@@ -762,11 +765,11 @@ var removeIsolatedFloor = function removeIsolatedFloor(width, height) {
             }
         };
 
-        for (var y = 1; y < height - 1; y++) {
+        for (var y = 1; y < level.height - 1; y++) {
             _loop(y);
         }
-    }for (var _x4 = 1; _x4 < width - 1; _x4++) {
-        for (var _y = 1; _y < height - 1; _y++) {
+    }for (var _x4 = 1; _x4 < level.width - 1; _x4++) {
+        for (var _y = 1; _y < level.height - 1; _y++) {
             if (level[_x4][_y].size) {
                 level[_x4][_y] = level[_x4][_y].size === maxSize ? "floor" : "wall";
             }
@@ -775,21 +778,21 @@ var removeIsolatedFloor = function removeIsolatedFloor(width, height) {
 };
 
 // remove groups of 5 or less walls
-var removeIsolatedWalls = function removeIsolatedWalls(width, height) {
-    for (var x = 2; x < width - 2; x++) {
+var removeIsolatedWalls = function removeIsolatedWalls() {
+    for (var x = 2; x < level.width - 2; x++) {
         var _loop2 = function _loop2(y) {
             var tempTile = { size: 0 };
-            floodFill(x, y, width, height, isWall, function (x, y) {
+            floodFill(x, y, isWall, function (x, y) {
                 level[x][y] = tempTile;
                 tempTile.size++;
             });
         };
 
-        for (var y = 2; y < height - 2; y++) {
+        for (var y = 2; y < level.height - 2; y++) {
             _loop2(y);
         }
-    }for (var _x5 = 0; _x5 < width; _x5++) {
-        for (var _y2 = 0; _y2 < height; _y2++) {
+    }for (var _x5 = 0; _x5 < level.width; _x5++) {
+        for (var _y2 = 0; _y2 < level.height; _y2++) {
             if (level[_x5][_y2].size) {
                 level[_x5][_y2] = level[_x5][_y2].size > 5 ? "wall" : "floor";
             }
@@ -801,11 +804,11 @@ var isDeadEnd = function isDeadEnd(x, y) {
     return level[x][y] === "floor" && countNeighbor("floor", x, y) === 1;
 };
 
-var findDeadEnds = function findDeadEnds(width, height) {
-    for (var x = 1; x < width - 1; x++) {
-        for (var y = 1; y < height - 1; y++) {
+var findDeadEnds = function findDeadEnds() {
+    for (var x = 1; x < level.width - 1; x++) {
+        for (var y = 1; y < level.height - 1; y++) {
             if (level[x][y] === "floor" && isDeadEnd(x, y)) {
-                floodFill(x, y, width, height, isDeadEnd, function (x, y) {
+                floodFill(x, y, isDeadEnd, function (x, y) {
                     level[x][y] = "deadEnd";
                 });
             }
@@ -813,9 +816,9 @@ var findDeadEnds = function findDeadEnds(width, height) {
     }
 };
 
-var fillDeadEnds = function fillDeadEnds(width, height) {
-    for (var x = 1; x < width - 1; x++) {
-        for (var y = 1; y < height - 1; y++) {
+var fillDeadEnds = function fillDeadEnds() {
+    for (var x = 1; x < level.width - 1; x++) {
+        for (var y = 1; y < level.height - 1; y++) {
             if (level[x][y] === "deadEnd") {
                 level[x][y] = "wall";
             }
@@ -823,36 +826,30 @@ var fillDeadEnds = function fillDeadEnds(width, height) {
     }
 };
 
-var convert2Tiles = function convert2Tiles(width, height) {
-    for (var x = 0; x < width; x++) {
-        for (var y = 0; y < height; y++) {
+var convert2Tiles = function convert2Tiles() {
+    for (var x = 0; x < level.width; x++) {
+        for (var y = 0; y < level.height; y++) {
             level[x][y] = createTile(level[x][y]);
         }
     }
 };
 
-var findDistanceFromWall = function findDistanceFromWall(width, height) {
-    var nodes = create2dArray(width, height, function () {
-        return {};
+var findDistanceFromWall = function findDistanceFromWall() {
+    var nodes = create2dArray(level.width, level.height, function (x, y) {
+        return { x: x, y: y, end: !level[x][y].passable };
     });
 
-    var ends = [];
-    for (var x = 0; x < width; x++) {
-        for (var y = 0; y < height; y++) {
-            if (!level[x][y].passable) {
-                var node = nodes[x][y];
-                node.x = x;
-                node.y = y;
-                ends.push(node);
-            }
-        }
-    }var neighbor = function neighbor(node) {
+    var end = function end(node) {
+        return node.end;
+    };
+
+    var neighbor = function neighbor(node) {
         var neighbors = [];
         for (var i = 0; i < 6; i++) {
-            var _x6 = node.x + xDir[i];
-            var _y3 = node.y + yDir[i];
-            if (inBounds(_x6, _y3, width, height)) {
-                neighbors.push(nodes[_x6][_y3]);
+            var x = node.x + xDir[i];
+            var y = node.y + yDir[i];
+            if (inBounds(x, y)) {
+                neighbors.push(nodes[x][y]);
             }
         }
         return neighbors;
@@ -862,28 +859,39 @@ var findDistanceFromWall = function findDistanceFromWall(width, height) {
         return 1;
     };
 
-    dijkstraMap({ ends: ends, neighbor: neighbor, cost: cost });
-    console.log();
+    // flat array of nodes
+    var graph = [];
+    for (var x = 0, i = 0; x < level.width; x++) {
+        for (var y = 0; y < level.height; y++, i++) {
+            graph[i] = nodes[x][y];
+        }
+    }var map = dijkstraMap({ graph: graph, end: end, neighbor: neighbor, cost: cost });
+
+    map.forEach(function (node) {
+        if (node.cost > 1) {
+            //level[node.x][node.y] = createTile("wall");
+        }
+    });
 };
 
-var normalizeLight = function normalizeLight(maxLight, width, height) {
-    for (var x = 0; x < width; x++) {
-        for (var y = 0; y < height; y++) {
+var normalizeLight = function normalizeLight(maxLight) {
+    for (var x = 0; x < level.width; x++) {
+        for (var y = 0; y < level.height; y++) {
             level[x][y].light /= maxLight;
         }
     }
 };
 
-var lightUp = function lightUp(width, height) {
-    for (var x = 0; x < width; x++) {
-        for (var y = 0; y < height; y++) {
+var lightUp = function lightUp() {
+    for (var x = 0; x < level.width; x++) {
+        for (var y = 0; y < level.height; y++) {
             level[x][y].light = 0;
         }
     }var maxLight = 0;
-    for (var _x7 = 0; _x7 < width; _x7++) {
-        for (var _y4 = 0; _y4 < height; _y4++) {
-            if (level[_x7][_y4].transparent) {
-                fov(_x7, _y4, function (x, y) {
+    for (var _x6 = 0; _x6 < level.width; _x6++) {
+        for (var _y3 = 0; _y3 < level.height; _y3++) {
+            if (level[_x6][_y3].transparent) {
+                fov(_x6, _y3, function (x, y) {
                     return level[x][y].transparent;
                 }, function (x, y) {
                     level[x][y].light++;
@@ -893,7 +901,7 @@ var lightUp = function lightUp(width, height) {
                 });
             }
         }
-    }normalizeLight(maxLight, width, height);
+    }normalizeLight(maxLight);
 };
 
 var createLevel = function createLevel(_ref) {
@@ -904,15 +912,17 @@ var createLevel = function createLevel(_ref) {
 
     // create a 2d array to represent the level
     level = create2dArray(width, height, "wall");
+    level.width = width;
+    level.height = height;
 
-    generateFloor(width, height, prng);
-    removeIsolatedFloor(width, height);
-    removeIsolatedWalls(width, height);
-    findDeadEnds(width, height);
-    fillDeadEnds(width, height);
-    convert2Tiles(width, height);
-    findDistanceFromWall(width, height);
-    lightUp(width, height);
+    generateFloor(prng);
+    removeIsolatedFloor();
+    removeIsolatedWalls();
+    findDeadEnds();
+    fillDeadEnds();
+    convert2Tiles();
+    findDistanceFromWall();
+    lightUp();
 
     return level;
 };
@@ -921,16 +931,18 @@ var randomTile = function randomTile(width, height, prng) {
     return [randInt(0, width - 1, prng), randInt(0, height - 1, prng)];
 };
 
-var populateLevel = function populateLevel(player) {
-    var x = 0;
-    var y = 0;
-    while (level[x][y].type !== "floor") {
-        var _randomTile = randomTile(level.length, level[0].length);
+var populateLevel = function populateLevel(player, x, y) {
+    if (x === undefined) {
+        x = 0;
+        y = 0;
+        while (!level[x][y].passable) {
+            var _randomTile = randomTile(level.width, level.height);
 
-        var _randomTile2 = babelHelpers.slicedToArray(_randomTile, 2);
+            var _randomTile2 = babelHelpers.slicedToArray(_randomTile, 2);
 
-        x = _randomTile2[0];
-        y = _randomTile2[1];
+            x = _randomTile2[0];
+            y = _randomTile2[1];
+        }
     }
     player.x = x;
     player.y = y;
@@ -938,21 +950,50 @@ var populateLevel = function populateLevel(player) {
     return level;
 };
 
+var available = function available(x, y) {
+    return level[x][y].passable && level[x][y].actor === undefined;
+};
+
+var addStairs = function addStairs() {
+    var x = 0;
+    var y = 0;
+    while (!available(x, y)) {
+        var _randomTile3 = randomTile(level.width, level.height);
+
+        var _randomTile4 = babelHelpers.slicedToArray(_randomTile3, 2);
+
+        x = _randomTile4[0];
+        y = _randomTile4[1];
+    }
+};
+
+var addItems = function addItems() {
+    addStairs();
+};
+
+/*const angle = (x1, y1, x2 = 1, y2 = 0) => {
+    let l1 = Math.sqrt(x1 * x1 + y1 * y1);
+    let l2 = Math.sqrt(x2 * x2 + y2 * y2);
+    return Math.acos((x1 * x2 + y1 * y2) / (l1 * l2));
+}*/
+
 var playerAct = function playerAct() {
     game.display.draw(game.level);
 };
 
 var see = function see() {
+    var reveal = function reveal(x, y) {
+        game.level[x][y].visible = true;
+        game.level[x][y].seen = true;
+    };
+
     for (var x = 0; x < game.width; x++) {
         for (var y = 0; y < game.height; y++) {
             game.level[x][y].visible = false;
         }
     }fov(this.x, this.y, function (x, y) {
         return game.level[x][y].transparent;
-    }, function (x, y, start, end) {
-        game.level[x][y].visible = true;
-        game.level[x][y].seen = true;
-    });
+    }, reveal);
 };
 
 var move = function move(_ref) {
@@ -1092,6 +1133,7 @@ var startGame = function startGame(_ref) {
     game$2.display.cacheLevel(game$2.level);
 
     populateLevel(game$2.player);
+    addItems();
 
     // add listeners
     window.addEventListener("keydown", keyDown.bind(null, game$2.player));
@@ -1119,10 +1161,6 @@ var createGame = (function (_ref2) {
     display.setDimensions(width, height, 16, 18, 1);
     display.load("tileset.png", startGame.bind(null, { seed: seed, width: width, height: height }));
 })
-
-var colors = {
-	white: "#FFF"
-};
 
 var prototype = {
 	// set the dimensions of the dislpay
@@ -1205,7 +1243,7 @@ var prototype = {
 		canvas.height = yu;
 		var ctx = canvas.getContext("2d");
 		ctx.drawImage(this.tileset, tile.spritex * xu, tile.spritey * yu, xu, yu, 0, 0, xu, yu);
-		ctx.fillStyle = colors[tile.color];
+		ctx.fillStyle = tile.color;
 		ctx.globalCompositeOperation = "source-in";
 		ctx.fillRect(0, 0, xu, yu);
 		tile.canvas = canvas;
@@ -1214,7 +1252,9 @@ var prototype = {
 	cacheLevel: function cacheLevel(level) {
 		for (var x = 0; x < this.width; x++) {
 			for (var y = 0; y < this.height; y++) {
-				this.cacheTile(level[x][y]);
+				var tile = level[x][y];
+				tile.color = tile.litColor(tile.light);
+				this.cacheTile(tile);
 			}
 		}
 	},
