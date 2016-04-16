@@ -4,6 +4,12 @@ import {dijkstraMap} from "./pathfinding";
 
 let level;
 
+const forEachTile = (callback) => {
+    for (let x = 0; x < level.width; x++) for (let y = 0; y < level.height; y++) {
+        callback({x, y, tile: level[x][y]});
+    }
+};
+
 // create a 2d array with dimensions width by height and filled with content
 const create2dArray = (width, height, content) => {
     const isFunction = typeof content === "function";
@@ -101,10 +107,14 @@ const countGroups = (x, y) => {
 };
 
 // count the number of neighboring tiles of a certain type
-const countNeighbor = (type, x, y) => {
+const countNeighbor = (isType, x, y) => {
+    if (typeof isType !== "function") {
+        const type = isType;
+        isType = (x) => x === type;
+    }
     let count = 0;
     for (let i = 0; i < 6; i++) {
-        if (level[x + xDir[i]][y + yDir[i]] === type) {
+        if (inBounds(x + xDir[i], y + yDir[i]) && isType(level[x + xDir[i]][y + yDir[i]])) {
             count++;
         }
     }
@@ -131,7 +141,7 @@ const isWall = (x, y) => level[x][y] === "wall";
 // remove all but the largest group of floor
 const removeIsolatedFloor = () => {
     let maxSize = 0;
-    for (let x = 1; x < level.width - 1; x++) for (let y = 1; y < level.height - 1; y++) {
+    forEachTile(({x, y}) => {
         let tempTile = { size: 0 };
         floodFill(x, y, isFloor, (x, y) => {
             level[x][y] = tempTile;
@@ -140,57 +150,57 @@ const removeIsolatedFloor = () => {
         if (tempTile.size > maxSize) {
             maxSize = tempTile.size;
         }
-    }
-    for (let x = 1; x < level.width - 1; x++) for (let y = 1; y < level.height - 1; y++) {
+    });
+    forEachTile(({x, y}) => {
         if (level[x][y].size) {
             level[x][y] = level[x][y].size === maxSize ? "floor" : "wall";
         }
-    }
+    });
 };
 
 // remove groups of 5 or less walls
 const removeIsolatedWalls = () => {
-    for (let x = 2; x < level.width - 2; x++) for (let y = 2; y < level.height - 2; y++) {
+    forEachTile(({x, y}) => {
         let tempTile = { size: 0 };
         floodFill(x, y, isWall, (x, y) => {
             level[x][y] = tempTile;
             tempTile.size++;
         });
-    }
-    for (let x = 0; x < level.width; x++) for (let y = 0; y < level.height; y++) {
+    });
+    forEachTile(({x, y}) => {
         if (level[x][y].size) {
             level[x][y] = level[x][y].size > 5 ? "wall" : "floor";
         }
-    }
+    });
 };
 
 const isDeadEnd = (x, y) => level[x][y] === "floor" && countNeighbor("floor", x, y) === 1;
 
 const findDeadEnds = () => {
-    for (let x = 1; x < level.width - 1; x++) for (let y = 1; y < level.height - 1; y++) {
+    forEachTile(({x, y}) => {
         if (level[x][y] === "floor" && isDeadEnd(x, y)) {
             floodFill(x, y, isDeadEnd, (x, y) => {
                 level[x][y] = "deadEnd";
             });
         }
-    }
+    });
 };
 
 const fillDeadEnds = () => {
-    for (let x = 1; x < level.width - 1; x++) for (let y = 1; y < level.height - 1; y++) {
+    forEachTile(({x, y}) => {
         if (level[x][y] === "deadEnd") {
             level[x][y] = "wall";
         }
-    }
+    });
 };
 
 const convert2Tiles = () => {
-    for (let x = 0; x < level.width; x++) for (let y = 0; y < level.height; y++) {
+    forEachTile(({x, y}) => {
         level[x][y] = createTile(level[x][y]);
-    }
+    });
 };
 
-const findDistanceFromWall = () => {
+const findCave = () => {
     const nodes = create2dArray(level.width, level.height, (x, y) => ({ x, y, end: !level[x][y].passable }));
 
     const end = node => node.end;
@@ -215,27 +225,91 @@ const findDistanceFromWall = () => {
         graph[i] = nodes[x][y];
     }
 
-    const map = dijkstraMap({graph, end, neighbor, cost});
+    const caveMap = dijkstraMap({graph, end, neighbor, cost});
 
-    map.forEach(node => {
+    caveMap.forEach(node => {
         if (node.cost > 1) {
-            //level[node.x][node.y] = createTile("wall");
+            level[node.x][node.y].cave = true;
+        }
+    });
+
+    // Find floor tiles one tile away from a cave
+    forEachTile(({x, y, tile}) => {
+        if (tile.passable && !tile.cavev && countNeighbor(node => node.cave, x, y)) {
+            tile.potentialCave = true;
+        }
+    });
+
+    // Make those tiles caves
+    // And find floor tiles one tile away from the new caves and make them cave exits
+    // Mark those cave exits as targets for dijkstra
+    forEachTile(({tile, x, y}) => {
+        if (tile.potentialCave) {
+            tile.cave = true;
         }
     });
 };
 
-const normalizeLight = (maxLight) => {
+const findExits = () => {
+    forEachTile(({tile, x, y}) => {
+        tile.light = 0;
+        if (tile.passable && !tile.cave && countNeighbor(node => node.cave, x, y)) {
+            if (countNeighbor(node => node.passable && !node.cave, x, y)) {
+                tile.exit = true;
+            } else {
+                tile.cave = true;
+            }
+        }
+    });
+
+    const nodes = create2dArray(level.width, level.height, (x, y) => ({ x, y, end: level[x][y].exit }));
+
+    const end = node => node.end;
+
+    const neighbor = node => {
+        const neighbors = [];
+        for (let i = 0; i < 6; i++) {
+            const x = node.x + xDir[i];
+            const y = node.y + yDir[i];
+            if (level[x][y].passable) {
+                neighbors.push(nodes[x][y]);
+            }
+        }
+        return neighbors;
+    };
+
+    const cost = () => 1;
+
+    // flat array of nodes
+    const graph = [];
     for (let x = 0; x < level.width; x++) for (let y = 0; y < level.height; y++) {
-        level[x][y].light /= maxLight;
+        if (level[x][y].passable) {
+            graph.push(nodes[x][y]);
+        }
     }
+    const exitMap = dijkstraMap({graph, end, neighbor, cost, verbose: true});
+
+    exitMap.forEach(node => {
+        const tile = level[node.x][node.y];
+        if (tile.cave) {
+            tile.light = node.cost / 20;
+        }
+    });
+    console.log(exitMap);
+};
+
+const normalizeLight = (maxLight) => {
+    forEachTile(({tile}) => {
+        tile.light /= maxLight;
+    });
 };
 
 const lightUp = () => {
-    for (let x = 0; x < level.width; x++) for (let y = 0; y < level.height; y++) {
-        level[x][y].light = 0;
-    }
+    forEachTile(({x, y}) => {
+        level[x][y].light = level[x][y].light || 0;
+    });
     let maxLight = 0;
-    for (let x = 0; x < level.width; x++) for (let y = 0; y < level.height; y++) {
+    forEachTile(({x, y}) => {
         if (level[x][y].transparent) {
             fov(x, y, (x, y) => level[x][y].transparent, (x, y) => {
                 level[x][y].light++;
@@ -244,7 +318,7 @@ const lightUp = () => {
                 }
             });
         }
-    }
+    });
     normalizeLight(maxLight);
 };
 
@@ -260,8 +334,9 @@ const createLevel = ({width, height, prng = Math.random}) => {
     findDeadEnds();
     fillDeadEnds();
     convert2Tiles();
-    findDistanceFromWall();
-    lightUp();
+    findCave();
+    findExits();
+    //lightUp();
 
 	return level;
 };
@@ -295,7 +370,6 @@ const addStairs = () => {
     while (!available(x, y)) {
         [x, y] = randomTile(level.width, level.height);
     }
-    
 };
 
 const addItems = () => {

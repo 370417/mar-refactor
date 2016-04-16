@@ -4,8 +4,9 @@ import Heap from "heap";
 // end(node) - returns true if node is an end node
 // neighbor(node) - returns an array of neighbors of a node
 // cost(node1, node2) - returns the cost to move from node1 to node2
-const dijkstraMap = ({graph, end, neighbor, cost}) => {
+const dijkstraMap = ({graph, end, neighbor, cost, verbose}) => {
     const unvisited = new Heap((a, b) => a.cost - b.cost);
+    const visited = [];
 
     for (let i = 0; i < graph.length; i++) {
         const node = graph[i];
@@ -16,17 +17,18 @@ const dijkstraMap = ({graph, end, neighbor, cost}) => {
     while (unvisited.peek()) {
         const node = unvisited.pop();
         node.visited = true;
+        visited.push(node);
+        if (node.cost === Infinity) { continue; }
         neighbor(node).forEach(neighbor => {
-            if (neighbor.visited) { return; }
             const altCost = node.cost + cost(node, neighbor);
-            if (altCost < neighbor.cost) {
+            if (!neighbor.visited && altCost < neighbor.cost) {
                 neighbor.cost = altCost;
-                neighbor.prev = node;
+                unvisited.updateItem(neighbor);
             }
         });
     }
 
-    return graph;
+    return visited;
 };
 
 export {dijkstraMap};

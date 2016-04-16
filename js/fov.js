@@ -113,24 +113,12 @@ const fov = (ox, oy, transparent, reveal) => {
                 if (current >= start && current <= end) {
                     reveal(x, y);
                     someRevealed = true;
-                    if (current >= 0 && current <= 2) {
-                        revealWall(x + 1, y - 1);
-                    }
-                    if (current >= 1 && current <= 3) {
-                        revealWall(x, y - 1);
-                    }
-                    if (current >= 2 && current <= 4) {
-                        revealWall(x - 1, y);
-                    }
-                    if (current >= 3 && current <= 5) {
-                        revealWall(x - 1, y + 1);
-                    }
-                    if (current >= 4 && current <= 6) {
-                        revealWall(x, y + 1);
-                    }
-                    if (current <= 1 || current >= 5) {
-                        revealWall(x + 1, y);
-                    }
+                    if (current >= 0 && current <= 2) { revealWall(x + 1, y - 1); }
+                    if (current >= 1 && current <= 3) { revealWall(x    , y - 1); }
+                    if (current >= 2 && current <= 4) { revealWall(x - 1, y    ); }
+                    if (current >= 3 && current <= 5) { revealWall(x - 1, y + 1); }
+                    if (current >= 4 && current <= 6) { revealWall(x    , y + 1); }
+                    if (current <= 1 || current >= 5) { revealWall(x + 1, y    ); }
                 }
             } else {
                 current = (arc + 0.5) / radius;

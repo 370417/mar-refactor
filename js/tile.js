@@ -20,9 +20,20 @@ const Tiles = {
         spritex: 1,
         spritey: 0,
         litColor(light) {
-            return arr2hsl([0, 0, 40 + Math.round(60 * light)]);
+            if (!light) return "#FFF";
+            return arr2hsl([Math.round(360 * light), 100, 40]);
         },
     },
+    marker: {
+        type: "marker",
+        passable: true,
+        transparent: true,
+        spritex: 1,
+        spritey: 0,
+        litColor(light) {
+            return arr2rgb([0, 0, 255]);
+        },
+    }
 };
 
 export default name => {
