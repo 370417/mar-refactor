@@ -8,13 +8,13 @@ const prototype = {
 		this.xunit = xunit;
 		this.yunit = yunit;
 		this.scale = scale;
-		this.canvas.width = (width - height / 2) * xunit;
+		this.canvas.width = (width - height / 2 + 1) * xunit;
 		this.canvas.height = height * yunit;
-		this.canvas.style.width = (width - height / 2) * xunit * scale + "px";
+		this.canvas.style.width = (width - height / 2 + 1) * xunit * scale + "px";
 		this.canvas.style.height = height * yunit * scale + "px";
-		this.bgcanvas.width = (width - height / 2) * xunit;
+		this.bgcanvas.width = (width - height / 2 + 1) * xunit;
 		this.bgcanvas.height = height * yunit;
-		this.bgcanvas.style.width = (width - height / 2) * xunit * scale + "px";
+		this.bgcanvas.style.width = (width - height / 2 + 1) * xunit * scale + "px";
 		this.bgcanvas.style.height = height * yunit * scale + "px";
 	},
 	// load the spritesheet then call callback
@@ -37,7 +37,7 @@ const prototype = {
 			for (let x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 				const tile = level[x][y];
 				if (true || tile.visible) {
-					const realx = (x - (this.height - y) / 2) * xu;
+					const realx = (x - (this.height - y - 1) / 2) * xu;
 					const realy = y * yu;
 					tile.drawn = false;
 					this.ctx.fillStyle = "#000";
@@ -58,7 +58,7 @@ const prototype = {
 			for (let x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 				const tile = level[x][y];
 				if (!tile.visible && tile.seen && !tile.drawn) {
-					const realx = (x - (this.height - y) / 2) * xu;
+					const realx = (x - (this.height - y - 1) / 2) * xu;
 					const realy = y * yu;
 					this.bgctx.clearRect(realx, realy, xu, yu);
 					this.bgctx.drawImage(tile.canvas, 0, 0, xu, yu, realx, realy, xu, yu);
@@ -92,7 +92,6 @@ const prototype = {
 		const y = Math.floor((e.clientY - this.canvas.offsetTop) / this.yunit);
 		const x = Math.floor((e.clientX - this.canvas.offsetLeft) / this.xunit + (this.height - y) / 2);
 		const tile = game.level[x][y];
-        console.log(tile.light);
 	},
 };
 

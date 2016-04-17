@@ -8,7 +8,7 @@ let game;
 const startGame = ({seed, width, height}) => {
     window.game = game;
 
-    game.player = createActor("player", game);
+    game.player = createActor("player");
 
     game.schedule = createSchedule();
     game.schedule.add(game.player);
@@ -34,6 +34,6 @@ export default ({seed = 0, display, width = 48, height = 30}) => {
         height,
     };
 
-	display.setDimensions(width, height, 16, 18, 1);
+	display.setDimensions(width, height, 8, 8, 2);
 	display.load("tileset.png", startGame.bind(null, {seed, width, height}));
 };

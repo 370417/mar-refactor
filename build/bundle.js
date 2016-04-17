@@ -44,15 +44,6 @@ babelHelpers;
 var __commonjs_global = typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : this;
 function __commonjs(fn, module) { return module = { exports: {} }, fn(module, module.exports, __commonjs_global), module.exports; }
 
-var arr2rgb = function arr2rgb(_ref) {
-    var _ref2 = babelHelpers.slicedToArray(_ref, 3);
-
-    var r = _ref2[0];
-    var g = _ref2[1];
-    var b = _ref2[2];
-    return "rgb(" + r + "," + g + "," + b + ")";
-};
-
 var arr2hsl = function arr2hsl(_ref3) {
     var _ref4 = babelHelpers.slicedToArray(_ref3, 3);
 
@@ -67,8 +58,8 @@ var Tiles = {
         type: "wall",
         passable: false,
         transparent: false,
-        spritex: 0,
-        spritey: 0,
+        spritex: 3,
+        spritey: 4,
         litColor: function litColor(light) {
             return arr2hsl([40, Math.round(10 * light), 60 + Math.round(20 * light)]);
         }
@@ -78,20 +69,10 @@ var Tiles = {
         passable: true,
         transparent: true,
         spritex: 1,
-        spritey: 0,
+        spritey: 4,
         litColor: function litColor(light) {
             if (!light) return "#FFF";
             return arr2hsl([Math.round(360 * light), 100, 40]);
-        }
-    },
-    marker: {
-        type: "marker",
-        passable: true,
-        transparent: true,
-        spritex: 1,
-        spritey: 0,
-        litColor: function litColor(light) {
-            return arr2rgb([0, 0, 255]);
         }
     }
 };
@@ -637,6 +618,149 @@ var dijkstraMap = function dijkstraMap(_ref) {
     return visited;
 };
 
+/*const angle = (x1, y1, x2 = 1, y2 = 0) => {
+    let l1 = Math.sqrt(x1 * x1 + y1 * y1);
+    let l2 = Math.sqrt(x2 * x2 + y2 * y2);
+    return Math.acos((x1 * x2 + y1 * y2) / (l1 * l2));
+}*/
+
+var xDir$2 = [0, 1, 1, 0, -1, -1];
+var yDir$2 = [1, 0, -1, -1, 0, 1];
+
+var forEachNeighbor = function forEachNeighbor(x, y, func) {
+    for (var i = 0; i < 6; i++) {
+        func({
+            x: x + xDir$2[i],
+            y: y + yDir$2[i],
+            tile: game.level[x + xDir$2[i]][y + yDir$2[i]]
+        });
+    }
+};
+
+// return a random number in the range [lower, upper]
+var randInt$1 = function randInt(lower, upper) {
+    var prng = arguments.length <= 2 || arguments[2] === undefined ? Math.random : arguments[2];
+
+    if (lower > upper) {
+        console.error("lower > upper");
+        return NaN;
+    }
+    return lower + Math.floor((upper - lower + 1) * prng());
+};
+
+var randomElement = function randomElement(array) {
+    var prng = arguments.length <= 1 || arguments[1] === undefined ? Math.random : arguments[1];
+    return array[randInt$1(0, array.length - 1, prng)];
+};
+
+var playerAct = function playerAct() {
+    game.display.draw(game.level);
+};
+
+var see = function see() {
+    var reveal = function reveal(x, y) {
+        game.level[x][y].visible = true;
+        game.level[x][y].seen = true;
+    };
+
+    for (var x = 0; x < game.width; x++) {
+        for (var y = 0; y < game.height; y++) {
+            game.level[x][y].visible = false;
+        }
+    }fov(this.x, this.y, function (x, y) {
+        return game.level[x][y].transparent;
+    }, reveal);
+};
+
+var move = function move(_ref) {
+    var _ref2 = babelHelpers.slicedToArray(_ref, 2);
+
+    var dx = _ref2[0];
+    var dy = _ref2[1];
+
+    console.log(dx, dy);
+    var x = this.x + dx;
+    var y = this.y + dy;
+    if (game.level[x][y].passable) {
+        game.level[this.x][this.y].actor = undefined;
+        this.x = x;
+        this.y = y;
+        game.level[this.x][this.y].actor = this;
+
+        if (this === game.player) {
+            this.see();
+        }
+
+        game.schedule.add(this, 100);
+        game.schedule.advance().act();
+    }
+};
+
+var act = function act() {
+    return this[this.state]();
+};
+
+var caveExitWandering = function caveExitWandering() {
+    var bestNeighbors = [];
+    var cost = game.level[this.x][this.y].light;
+    var pathFound = false;
+    forEachNeighbor(this.x, this.y, function (_ref3) {
+        var x = _ref3.x;
+        var y = _ref3.y;
+        var tile = _ref3.tile;
+
+        if (!tile.passable) {
+            return;
+        }
+        if (tile.light < cost) {
+            pathFound = true;
+            cost = tile.light;
+            bestNeighbors = [{ x: x, y: y }];
+        } else if (tile.light === cost) {
+            bestNeighbors.push({ x: x, y: y });
+        }
+    });
+
+    if (pathFound) {
+        var _randomElement = randomElement(bestNeighbors);
+
+        var x = _randomElement.x;
+        var y = _randomElement.y;
+
+        return this.move([x - this.x, y - this.y]);
+    } else {
+        console.log("no path found");
+    }
+};
+
+var actors = {
+    player: {
+        name: "player",
+        color: "white",
+        spritex: 6,
+        spritey: 4,
+        see: see,
+        act: playerAct,
+        move: move
+    },
+    mob: {
+        name: "mob",
+        color: "white",
+        spritex: 12,
+        spritey: 2,
+        state: "wandering",
+        wandering: caveExitWandering,
+        act: act,
+        move: move
+    }
+};
+
+var createActor = function createActor(name) {
+    var actor = Object.create(actors[name]);
+    game.display.cacheTile(actor);
+    return actor;
+};
+
 var level = void 0;
 
 var forEachTile = function forEachTile(callback) {
@@ -1002,7 +1126,6 @@ var findExits = function findExits() {
             tile.light = node.cost / 20;
         }
     });
-    console.log(exitMap);
 };
 
 var createLevel = function createLevel(_ref14) {
@@ -1029,26 +1152,53 @@ var createLevel = function createLevel(_ref14) {
     return level;
 };
 
-var randomTile = function randomTile(width, height, prng) {
-    return [randInt(0, width - 1, prng), randInt(0, height - 1, prng)];
+var randomTile = function randomTile(prng) {
+    return [randInt(0, level.width - 1, prng), randInt(0, level.height - 1, prng)];
+};
+
+var randomTileFrom = function randomTileFrom(condition, prng) {
+    var x = 0;
+    var y = 0;
+    while (!condition(x, y)) {
+        var _randomTile = randomTile(prng);
+
+        var _randomTile2 = babelHelpers.slicedToArray(_randomTile, 2);
+
+        x = _randomTile2[0];
+        y = _randomTile2[1];
+    }
+    return [x, y];
+};
+
+var empty = function empty(x, y) {
+    return level[x][y].passable && !level[x][y].actor;
 };
 
 var populateLevel = function populateLevel(player, x, y) {
     if (x === undefined) {
-        x = 0;
-        y = 0;
-        while (!level[x][y].passable) {
-            var _randomTile = randomTile(level.width, level.height);
+        var _randomTileFrom = randomTileFrom(empty);
 
-            var _randomTile2 = babelHelpers.slicedToArray(_randomTile, 2);
+        var _randomTileFrom2 = babelHelpers.slicedToArray(_randomTileFrom, 2);
 
-            x = _randomTile2[0];
-            y = _randomTile2[1];
-        }
+        x = _randomTileFrom2[0];
+        y = _randomTileFrom2[1];
     }
     player.x = x;
     player.y = y;
     level[x][y].actor = player;
+
+    monster = createActor("mob");
+
+    var _randomTileFrom3 = randomTileFrom(empty);
+
+    var _randomTileFrom4 = babelHelpers.slicedToArray(_randomTileFrom3, 2);
+
+    monster.x = _randomTileFrom4[0];
+    monster.y = _randomTileFrom4[1];
+
+    level[monster.x][monster.y].actor = monster;
+    game.schedule.add(monster);
+
     return level;
 };
 
@@ -1060,7 +1210,7 @@ var addStairs = function addStairs() {
     var x = 0;
     var y = 0;
     while (!available(x, y)) {
-        var _randomTile3 = randomTile(level.width, level.height);
+        var _randomTile3 = randomTile();
 
         var _randomTile4 = babelHelpers.slicedToArray(_randomTile3, 2);
 
@@ -1071,69 +1221,6 @@ var addStairs = function addStairs() {
 
 var addItems = function addItems() {
     addStairs();
-};
-
-/*const angle = (x1, y1, x2 = 1, y2 = 0) => {
-    let l1 = Math.sqrt(x1 * x1 + y1 * y1);
-    let l2 = Math.sqrt(x2 * x2 + y2 * y2);
-    return Math.acos((x1 * x2 + y1 * y2) / (l1 * l2));
-}*/
-
-var playerAct = function playerAct() {
-    game.display.draw(game.level);
-};
-
-var see = function see() {
-    var reveal = function reveal(x, y) {
-        game.level[x][y].visible = true;
-        game.level[x][y].seen = true;
-    };
-
-    for (var x = 0; x < game.width; x++) {
-        for (var y = 0; y < game.height; y++) {
-            game.level[x][y].visible = false;
-        }
-    }fov(this.x, this.y, function (x, y) {
-        return game.level[x][y].transparent;
-    }, reveal);
-};
-
-var move = function move(_ref) {
-    var _ref2 = babelHelpers.slicedToArray(_ref, 2);
-
-    var dx = _ref2[0];
-    var dy = _ref2[1];
-
-    var x = this.x + dx;
-    var y = this.y + dy;
-    if (game.level[x][y].passable) {
-        game.level[this.x][this.y].actor = undefined;
-        this.x = x;
-        this.y = y;
-        game.level[this.x][this.y].actor = this;
-
-        this.see();
-
-        game.schedule.add(this, 100);
-        game.schedule.advance().act();
-    }
-};
-
-var actors = {
-    player: {
-        color: "white",
-        spritex: 0,
-        spritey: 1,
-        see: see,
-        act: playerAct,
-        move: move
-    }
-};
-
-var createActor = function createActor(name, game) {
-    var actor = Object.create(actors[name]);
-    game.display.cacheTile(actor);
-    return actor;
 };
 
 var createSchedule = (function (_) {
@@ -1226,7 +1313,7 @@ var startGame = function startGame(_ref) {
 
     window.game = game$2;
 
-    game$2.player = createActor("player", game$2);
+    game$2.player = createActor("player");
 
     game$2.schedule = createSchedule();
     game$2.schedule.add(game$2.player);
@@ -1260,7 +1347,7 @@ var createGame = (function (_ref2) {
         height: height
     };
 
-    display.setDimensions(width, height, 16, 18, 1);
+    display.setDimensions(width, height, 8, 8, 2);
     display.load("tileset.png", startGame.bind(null, { seed: seed, width: width, height: height }));
 })
 
@@ -1275,13 +1362,13 @@ var prototype = {
 		this.xunit = xunit;
 		this.yunit = yunit;
 		this.scale = scale;
-		this.canvas.width = (width - height / 2) * xunit;
+		this.canvas.width = (width - height / 2 + 1) * xunit;
 		this.canvas.height = height * yunit;
-		this.canvas.style.width = (width - height / 2) * xunit * scale + "px";
+		this.canvas.style.width = (width - height / 2 + 1) * xunit * scale + "px";
 		this.canvas.style.height = height * yunit * scale + "px";
-		this.bgcanvas.width = (width - height / 2) * xunit;
+		this.bgcanvas.width = (width - height / 2 + 1) * xunit;
 		this.bgcanvas.height = height * yunit;
-		this.bgcanvas.style.width = (width - height / 2) * xunit * scale + "px";
+		this.bgcanvas.style.width = (width - height / 2 + 1) * xunit * scale + "px";
 		this.bgcanvas.style.height = height * yunit * scale + "px";
 	},
 
@@ -1307,7 +1394,7 @@ var prototype = {
 			for (var x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 				var tile = level[x][y];
 				if (true || tile.visible) {
-					var realx = (x - (this.height - y) / 2) * xu;
+					var realx = (x - (this.height - y - 1) / 2) * xu;
 					var realy = y * yu;
 					tile.drawn = false;
 					this.ctx.fillStyle = "#000";
@@ -1328,7 +1415,7 @@ var prototype = {
 			for (var x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 				var tile = level[x][y];
 				if (!tile.visible && tile.seen && !tile.drawn) {
-					var realx = (x - (this.height - y) / 2) * xu;
+					var realx = (x - (this.height - y - 1) / 2) * xu;
 					var realy = y * yu;
 					this.bgctx.clearRect(realx, realy, xu, yu);
 					this.bgctx.drawImage(tile.canvas, 0, 0, xu, yu, realx, realy, xu, yu);
@@ -1364,7 +1451,6 @@ var prototype = {
 		var y = Math.floor((e.clientY - this.canvas.offsetTop) / this.yunit);
 		var x = Math.floor((e.clientX - this.canvas.offsetLeft) / this.xunit + (this.height - y) / 2);
 		var tile = game.level[x][y];
-		console.log(tile.light);
 	}
 };
 

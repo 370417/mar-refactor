@@ -7,8 +7,8 @@ const Tiles = {
         type: "wall",
         passable: false,
         transparent: false,
-		spritex: 0,
-		spritey: 0,
+		spritex: 3,
+		spritey: 4,
         litColor(light) {
             return arr2hsl([40, Math.round(10 * light), 60 + Math.round(20 * light)]);
         },
@@ -18,22 +18,12 @@ const Tiles = {
         passable: true,
         transparent: true,
         spritex: 1,
-        spritey: 0,
+        spritey: 4,
         litColor(light) {
             if (!light) return "#FFF";
             return arr2hsl([Math.round(360 * light), 100, 40]);
         },
     },
-    marker: {
-        type: "marker",
-        passable: true,
-        transparent: true,
-        spritex: 1,
-        spritey: 0,
-        litColor(light) {
-            return arr2rgb([0, 0, 255]);
-        },
-    }
 };
 
 export default name => {

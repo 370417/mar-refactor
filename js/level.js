@@ -1,6 +1,7 @@
 import createTile from "./tile";
 import {fov} from "./fov";
 import {dijkstraMap} from "./pathfinding";
+import createActor from "./actor";
 
 let level;
 
@@ -295,7 +296,6 @@ const findExits = () => {
             tile.light = node.cost / 20;
         }
     });
-    console.log(exitMap);
 };
 
 const normalizeLight = (maxLight) => {
@@ -341,22 +341,35 @@ const createLevel = ({width, height, prng = Math.random}) => {
 	return level;
 };
 
-const randomTile = (width, height, prng) => ([
-    randInt(0, width - 1, prng),
-    randInt(0, height - 1, prng),
+const randomTile = (prng) => ([
+    randInt(0, level.width - 1, prng),
+    randInt(0, level.height - 1, prng),
 ]);
+
+const randomTileFrom = (condition, prng) => {
+    let x = 0;
+    let y = 0;
+    while (!condition(x, y)) {
+        [x, y] = randomTile(prng);
+    }
+    return [x, y];
+};
+
+const empty = (x, y) => level[x][y].passable && !level[x][y].actor;
 
 const populateLevel = (player, x, y) => {
     if (x === undefined) {
-        x = 0;
-        y = 0;
-        while (!level[x][y].passable) {
-            [x, y] = randomTile(level.width, level.height);
-        }
+        [x, y] = randomTileFrom(empty);
     }
     player.x = x;
     player.y = y;
     level[x][y].actor = player;
+
+    monster = createActor("mob");
+    [monster.x, monster.y] = randomTileFrom(empty);
+    level[monster.x][monster.y].actor = monster;
+    game.schedule.add(monster);
+
     return level;
 };
 
@@ -368,7 +381,7 @@ const addStairs = () => {
     let x = 0;
     let y = 0;
     while (!available(x, y)) {
-        [x, y] = randomTile(level.width, level.height);
+        [x, y] = randomTile();
     }
 };
 
