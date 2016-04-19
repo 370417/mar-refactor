@@ -12,6 +12,8 @@ const yDir = [1, 0,-1,-1, 0, 1];
 const forEachNeighbor = (x, y, func) => {
     for (let i = 0; i < 6; i++) {
         func({
+            dx: xDir[i],
+            dy: yDir[i],
             x: x + xDir[i],
             y: y + yDir[i],
             tile: game.level[x + xDir[i]][y + yDir[i]],
@@ -19,6 +21,7 @@ const forEachNeighbor = (x, y, func) => {
     }
 };
 
+const empty = (x, y) => game.level[x][y].passable && !game.level[x][y].actor;
 
 // return a random number in the range [lower, upper]
 const randInt = (lower, upper, prng = Math.random) => {
@@ -48,10 +51,11 @@ const see = function() {
 };
 
 const move = function([dx, dy]) {
-    console.log(dx, dy);
     const x = this.x + dx;
     const y = this.y + dy;
     if (game.level[x][y].passable) {
+        this.lastMove = {dx, dy};
+
         game.level[this.x][this.y].actor = undefined;
         this.x = x;
         this.y = y;
@@ -70,52 +74,60 @@ const act = function() {
     return this[this.state]();
 }
 
-const caveExitWandering = function() {
-    let bestNeighbors = [];
-    let cost = game.level[this.x][this.y].light;
-    let pathFound = false;
-    forEachNeighbor(this.x, this.y, ({x, y, tile}) => {
-        if (!tile.passable) { return; }
-        if (tile.light < cost) {
-            pathFound = true;
-            cost = tile.light;
-            bestNeighbors = [{x, y}];
-        } else if (tile.light === cost) {
-            bestNeighbors.push({x, y});
+const tunnelWandering = function() {
+
+    const allMoves = [];
+    forEachNeighbor(this.x, this.y, ({dx, dy, x, y, tile}) => {
+        if (empty(x, y) && !(dx === -this.lastMove.dx && dy === -this.lastMove.dy)) {
+            allMoves.push({dx, dy});
         }
     });
 
-    if (pathFound) {
-        const {x, y} = randomElement(bestNeighbors);
-        return this.move([x - this.x, y - this.y]);
+    if (allMoves.length) {
+        const {dx, dy} = randomElement(allMoves);
+        return this.move([dx, dy]);
     } else {
-        console.log("no path found");
+        console.error("Oops stuck");
     }
 };
 
+const baseActor = {
+    act: act,
+    move: move,
+    lastMove: {
+        dx: 0,
+        dy: 0,
+    },
+};
+
+const asActor = actor => {
+    const base = Object.create(baseActor);
+    for (key in actor) {
+        base[key] = actor[key];
+    }
+    return base;
+};
+
 const actors = {
-    player: {
+    player: asActor({
         name: "player",
         color: "white",
         spritex: 6,
         spritey: 4,
         see: see,
         act: playerAct,
-        move: move,
-    },
-    mob: {
+    }),
+    mob: asActor({
         name: "mob",
         color: "white",
         spritex: 12,
         spritey: 2,
         state: "wandering",
-        wandering: caveExitWandering,
-        act: act,
-        move: move,
-    }
+        wandering: tunnelWandering,
+    }),
 };
 
-const createActor = (name) => {
+const createActor = name => {
     const actor = Object.create(actors[name]);
     game.display.cacheTile(actor);
     return actor;

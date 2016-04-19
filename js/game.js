@@ -16,9 +16,6 @@ const startGame = ({seed, width, height}) => {
     game.level = createLevel({width, height});
     game.display.cacheLevel(game.level);
 
-    populateLevel(game.player);
-    addItems();
-
     // add listeners
     window.addEventListener("keydown", keyDown.bind(null, game.player));
 

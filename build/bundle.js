@@ -60,9 +60,7 @@ var Tiles = {
         transparent: false,
         spritex: 3,
         spritey: 4,
-        litColor: function litColor(light) {
-            return arr2hsl([40, Math.round(10 * light), 60 + Math.round(20 * light)]);
-        }
+        color: arr2hsl([40, 10, 75])
     },
     floor: {
         type: "floor",
@@ -70,10 +68,23 @@ var Tiles = {
         transparent: true,
         spritex: 1,
         spritey: 4,
-        litColor: function litColor(light) {
-            if (!light) return "#FFF";
-            return arr2hsl([Math.round(360 * light), 100, 40]);
-        }
+        color: "#FFF"
+    },
+    grass: {
+        type: "grass",
+        passable: true,
+        transparent: true,
+        spritex: 5,
+        spritey: 4,
+        color: "#080"
+    },
+    tallGrass: {
+        type: "grass",
+        passable: true,
+        transparent: false,
+        spritex: 2,
+        spritey: 4,
+        color: "#080"
     }
 };
 
@@ -630,11 +641,17 @@ var yDir$2 = [1, 0, -1, -1, 0, 1];
 var forEachNeighbor = function forEachNeighbor(x, y, func) {
     for (var i = 0; i < 6; i++) {
         func({
+            dx: xDir$2[i],
+            dy: yDir$2[i],
             x: x + xDir$2[i],
             y: y + yDir$2[i],
             tile: game.level[x + xDir$2[i]][y + yDir$2[i]]
         });
     }
+};
+
+var empty$1 = function empty(x, y) {
+    return game.level[x][y].passable && !game.level[x][y].actor;
 };
 
 // return a random number in the range [lower, upper]
@@ -678,10 +695,11 @@ var move = function move(_ref) {
     var dx = _ref2[0];
     var dy = _ref2[1];
 
-    console.log(dx, dy);
     var x = this.x + dx;
     var y = this.y + dy;
     if (game.level[x][y].passable) {
+        this.lastMove = { dx: dx, dy: dy };
+
         game.level[this.x][this.y].actor = undefined;
         this.x = x;
         this.y = y;
@@ -700,59 +718,68 @@ var act = function act() {
     return this[this.state]();
 };
 
-var caveExitWandering = function caveExitWandering() {
-    var bestNeighbors = [];
-    var cost = game.level[this.x][this.y].light;
-    var pathFound = false;
+var tunnelWandering = function tunnelWandering() {
+    var _this = this;
+
+    var allMoves = [];
     forEachNeighbor(this.x, this.y, function (_ref3) {
+        var dx = _ref3.dx;
+        var dy = _ref3.dy;
         var x = _ref3.x;
         var y = _ref3.y;
         var tile = _ref3.tile;
 
-        if (!tile.passable) {
-            return;
-        }
-        if (tile.light < cost) {
-            pathFound = true;
-            cost = tile.light;
-            bestNeighbors = [{ x: x, y: y }];
-        } else if (tile.light === cost) {
-            bestNeighbors.push({ x: x, y: y });
+        if (empty$1(x, y) && !(dx === -_this.lastMove.dx && dy === -_this.lastMove.dy)) {
+            allMoves.push({ dx: dx, dy: dy });
         }
     });
 
-    if (pathFound) {
-        var _randomElement = randomElement(bestNeighbors);
+    if (allMoves.length) {
+        var _randomElement = randomElement(allMoves);
 
-        var x = _randomElement.x;
-        var y = _randomElement.y;
+        var dx = _randomElement.dx;
+        var dy = _randomElement.dy;
 
-        return this.move([x - this.x, y - this.y]);
+        return this.move([dx, dy]);
     } else {
-        console.log("no path found");
+        console.error("Oops stuck");
     }
 };
 
+var baseActor = {
+    act: act,
+    move: move,
+    lastMove: {
+        dx: 0,
+        dy: 0
+    }
+};
+
+var asActor = function asActor(actor) {
+    var base = Object.create(baseActor);
+    for (key in actor) {
+        base[key] = actor[key];
+    }
+    return base;
+};
+
 var actors = {
-    player: {
+    player: asActor({
         name: "player",
         color: "white",
         spritex: 6,
         spritey: 4,
         see: see,
-        act: playerAct,
-        move: move
-    },
-    mob: {
+        act: playerAct
+    }),
+    mob: asActor({
         name: "mob",
         color: "white",
         spritex: 12,
         spritey: 2,
         state: "wandering",
-        wandering: caveExitWandering,
-        act: act,
-        move: move
-    }
+        wandering: tunnelWandering
+    })
 };
 
 var createActor = function createActor(name) {
@@ -1064,13 +1091,41 @@ var findCave = function findCave() {
             tile.cave = true;
         }
     });
+
+    var isCave = function isCave(x, y) {
+        return level[x][y].cave === true;
+    };
+
+    // floodfill to group caves
+    var caves = [];
+    forEachTile(function (_ref10) {
+        var x = _ref10.x;
+        var y = _ref10.y;
+
+        if (level[x][y].cave === true) {
+            (function () {
+                var cave = {
+                    size: 0,
+                    tiles: []
+                };
+                caves.push(cave);
+                floodFill(x, y, isCave, function (x, y) {
+                    level[x][y].cave = cave;
+                    cave.size++;
+                    cave.tiles.push({ x: x, y: y });
+                });
+            })();
+        }
+    });
+
+    return caves;
 };
 
 var findExits = function findExits() {
-    forEachTile(function (_ref10) {
-        var tile = _ref10.tile;
-        var x = _ref10.x;
-        var y = _ref10.y;
+    forEachTile(function (_ref11) {
+        var tile = _ref11.tile;
+        var x = _ref11.x;
+        var y = _ref11.y;
 
         tile.light = 0;
         if (tile.passable && !tile.cave && countNeighbor(function (node) {
@@ -1085,54 +1140,92 @@ var findExits = function findExits() {
             }
         }
     });
+};
 
-    var nodes = create2dArray(level.width, level.height, function (x, y) {
-        return { x: x, y: y, end: level[x][y].exit };
+var normalizeLight = function normalizeLight(maxLight) {
+    forEachTile(function (_ref12) {
+        var tile = _ref12.tile;
+
+        tile.light /= maxLight;
     });
+};
 
-    var end = function end(node) {
-        return node.end;
-    };
+var lightUp = function lightUp() {
+    forEachTile(function (_ref13) {
+        var x = _ref13.x;
+        var y = _ref13.y;
 
-    var neighbor = function neighbor(node) {
-        var neighbors = [];
-        for (var i = 0; i < 6; i++) {
-            var x = node.x + xDir[i];
-            var y = node.y + yDir[i];
-            if (level[x][y].passable) {
-                neighbors.push(nodes[x][y]);
-            }
+        level[x][y].light = level[x][y].light || 0;
+    });
+    var maxLight = 0;
+    forEachTile(function (_ref14) {
+        var x = _ref14.x;
+        var y = _ref14.y;
+
+        if (level[x][y].transparent) {
+            fov(x, y, function (x, y) {
+                return level[x][y].transparent;
+            }, function (x, y) {
+                level[x][y].light++;
+                if (level[x][y].light > maxLight) {
+                    maxLight = level[x][y].light;
+                }
+            });
         }
-        return neighbors;
-    };
+    });
+    normalizeLight(maxLight);
+};
 
-    var cost = function cost() {
-        return 1;
-    };
+var grassCave = function grassCave(cave) {
+    var chanceA = Math.random();
+    var chanceB = Math.random();
+    var tallGrassChance = Math.min(chanceA, chanceB);
+    var grassChance = Math.max(chanceA, chanceB);
+    cave.tiles.sort(function (a, b) {
+        return level[b.x][b.y].light - level[a.x][a.y].light;
+    }).forEach(function (_ref15, i) {
+        var x = _ref15.x;
+        var y = _ref15.y;
 
-    // flat array of nodes
-    var graph = [];
-    for (var x = 0; x < level.width; x++) {
-        for (var y = 0; y < level.height; y++) {
-            if (level[x][y].passable) {
-                graph.push(nodes[x][y]);
-            }
+        var oldTile = level[x][y];
+        if (i < cave.tiles.length * tallGrassChance) {
+            level[x][y] = createTile("tallGrass");
+        } else if (i < cave.tiles.length * grassChance) {
+            level[x][y] = createTile("grass");
         }
-    }var exitMap = dijkstraMap({ graph: graph, end: end, neighbor: neighbor, cost: cost, verbose: true });
-
-    exitMap.forEach(function (node) {
-        var tile = level[node.x][node.y];
-        if (tile.cave) {
-            tile.light = node.cost / 20;
+        if (level[x][y] !== oldTile) {
+            for (key in oldTile) {
+                if (oldTile.hasOwnProperty(key)) {
+                    level[x][y][key] = oldTile[key];
+                }
+            }
         }
     });
 };
 
-var createLevel = function createLevel(_ref14) {
-    var width = _ref14.width;
-    var height = _ref14.height;
-    var _ref14$prng = _ref14.prng;
-    var prng = _ref14$prng === undefined ? Math.random : _ref14$prng;
+var decorateCaves = function decorateCaves(caves) {
+    var indeces = randRange(caves.length);
+    for (var j = 0; j < caves.length; j++) {
+        var i = indeces[j];
+        var cave = caves[i];
+        grassCave(cave);
+        if (j === 0) {
+            var _cave$tiles$Math$floo = cave.tiles[Math.floor(cave.tiles.length * Math.random())];
+            var x = _cave$tiles$Math$floo.x;
+            var y = _cave$tiles$Math$floo.y;
+
+            game.player.x = x;
+            game.player.y = y;
+            level[x][y].actor = game.player;
+        }
+    }
+};
+
+var createLevel = function createLevel(_ref16) {
+    var width = _ref16.width;
+    var height = _ref16.height;
+    var _ref16$prng = _ref16.prng;
+    var prng = _ref16$prng === undefined ? Math.random : _ref16$prng;
 
     // create a 2d array to represent the level
     level = create2dArray(width, height, "wall");
@@ -1145,82 +1238,12 @@ var createLevel = function createLevel(_ref14) {
     findDeadEnds();
     fillDeadEnds();
     convert2Tiles();
-    findCave();
+    var caves = findCave();
     findExits();
-    //lightUp();
+    lightUp();
+    decorateCaves(caves);
 
     return level;
-};
-
-var randomTile = function randomTile(prng) {
-    return [randInt(0, level.width - 1, prng), randInt(0, level.height - 1, prng)];
-};
-
-var randomTileFrom = function randomTileFrom(condition, prng) {
-    var x = 0;
-    var y = 0;
-    while (!condition(x, y)) {
-        var _randomTile = randomTile(prng);
-
-        var _randomTile2 = babelHelpers.slicedToArray(_randomTile, 2);
-
-        x = _randomTile2[0];
-        y = _randomTile2[1];
-    }
-    return [x, y];
-};
-
-var empty = function empty(x, y) {
-    return level[x][y].passable && !level[x][y].actor;
-};
-
-var populateLevel = function populateLevel(player, x, y) {
-    if (x === undefined) {
-        var _randomTileFrom = randomTileFrom(empty);
-
-        var _randomTileFrom2 = babelHelpers.slicedToArray(_randomTileFrom, 2);
-
-        x = _randomTileFrom2[0];
-        y = _randomTileFrom2[1];
-    }
-    player.x = x;
-    player.y = y;
-    level[x][y].actor = player;
-
-    monster = createActor("mob");
-
-    var _randomTileFrom3 = randomTileFrom(empty);
-
-    var _randomTileFrom4 = babelHelpers.slicedToArray(_randomTileFrom3, 2);
-
-    monster.x = _randomTileFrom4[0];
-    monster.y = _randomTileFrom4[1];
-
-    level[monster.x][monster.y].actor = monster;
-    game.schedule.add(monster);
-
-    return level;
-};
-
-var available = function available(x, y) {
-    return level[x][y].passable && level[x][y].actor === undefined;
-};
-
-var addStairs = function addStairs() {
-    var x = 0;
-    var y = 0;
-    while (!available(x, y)) {
-        var _randomTile3 = randomTile();
-
-        var _randomTile4 = babelHelpers.slicedToArray(_randomTile3, 2);
-
-        x = _randomTile4[0];
-        y = _randomTile4[1];
-    }
-};
-
-var addItems = function addItems() {
-    addStairs();
 };
 
 var createSchedule = (function (_) {
@@ -1321,9 +1344,6 @@ var startGame = function startGame(_ref) {
     game$2.level = createLevel({ width: width, height: height });
     game$2.display.cacheLevel(game$2.level);
 
-    populateLevel(game$2.player);
-    addItems();
-
     // add listeners
     window.addEventListener("keydown", keyDown.bind(null, game$2.player));
 
@@ -1393,7 +1413,7 @@ var prototype = {
 		for (var y = 0; y < this.height; y++) {
 			for (var x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 				var tile = level[x][y];
-				if (true || tile.visible) {
+				if (tile.light || tile.visible) {
 					var realx = (x - (this.height - y - 1) / 2) * xu;
 					var realy = y * yu;
 					tile.drawn = false;
@@ -1442,15 +1462,21 @@ var prototype = {
 		for (var x = 0; x < this.width; x++) {
 			for (var y = 0; y < this.height; y++) {
 				var tile = level[x][y];
-				tile.color = tile.litColor(tile.light);
 				this.cacheTile(tile);
 			}
 		}
 	},
 	mousemove: function mousemove(e) {
-		var y = Math.floor((e.clientY - this.canvas.offsetTop) / this.yunit);
-		var x = Math.floor((e.clientX - this.canvas.offsetLeft) / this.xunit + (this.height - y) / 2);
-		var tile = game.level[x][y];
+		var y = Math.floor((e.clientY - this.canvas.offsetTop) / this.yunit / this.scale);
+		var x = Math.floor((e.clientX - this.canvas.offsetLeft) / this.xunit / this.scale + (this.height - y - 1) / 2);
+		var tile = this.cacheTile({
+			spritex: 9,
+			spritey: 4,
+			color: game.level[x][y].color
+		});
+		var realx = (x - (this.height - y - 1) / 2) * 8;
+		var realy = y * 8;
+		//this.ctx.drawImage(tile.canvas, 0, 0, 8, 8, realx, realy, 8, 8);
 	}
 };
 

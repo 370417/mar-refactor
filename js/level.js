@@ -249,6 +249,27 @@ const findCave = () => {
             tile.cave = true;
         }
     });
+
+    const isCave = (x, y) => level[x][y].cave === true;
+
+    // floodfill to group caves
+    const caves = [];
+    forEachTile(({x, y}) => {
+        if (level[x][y].cave === true) {
+            const cave = {
+                size: 0,
+                tiles: [],
+            };
+            caves.push(cave);
+            floodFill(x, y, isCave, (x, y) => {
+                level[x][y].cave = cave;
+                cave.size++;
+                cave.tiles.push({x, y});
+            });
+        }
+    });
+
+    return caves;
 };
 
 const findExits = () => {
@@ -260,40 +281,6 @@ const findExits = () => {
             } else {
                 tile.cave = true;
             }
-        }
-    });
-
-    const nodes = create2dArray(level.width, level.height, (x, y) => ({ x, y, end: level[x][y].exit }));
-
-    const end = node => node.end;
-
-    const neighbor = node => {
-        const neighbors = [];
-        for (let i = 0; i < 6; i++) {
-            const x = node.x + xDir[i];
-            const y = node.y + yDir[i];
-            if (level[x][y].passable) {
-                neighbors.push(nodes[x][y]);
-            }
-        }
-        return neighbors;
-    };
-
-    const cost = () => 1;
-
-    // flat array of nodes
-    const graph = [];
-    for (let x = 0; x < level.width; x++) for (let y = 0; y < level.height; y++) {
-        if (level[x][y].passable) {
-            graph.push(nodes[x][y]);
-        }
-    }
-    const exitMap = dijkstraMap({graph, end, neighbor, cost, verbose: true});
-
-    exitMap.forEach(node => {
-        const tile = level[node.x][node.y];
-        if (tile.cave) {
-            tile.light = node.cost / 20;
         }
     });
 };
@@ -322,6 +309,45 @@ const lightUp = () => {
     normalizeLight(maxLight);
 };
 
+const grassCave = cave => {
+    const chanceA = Math.random();
+    const chanceB = Math.random();
+    const tallGrassChance = Math.min(chanceA, chanceB);
+    const grassChance = Math.max(chanceA, chanceB);
+    cave.tiles.sort((a, b) => {
+        return level[b.x][b.y].light - level[a.x][a.y].light;
+    }).forEach(({x, y}, i) => {
+        const oldTile = level[x][y];
+        if (i < cave.tiles.length * tallGrassChance) {
+            level[x][y] = createTile("tallGrass");
+        } else if (i < cave.tiles.length * grassChance) {
+            level[x][y] = createTile("grass");
+        }
+        if (level[x][y] !== oldTile) {
+            for (key in oldTile) {
+                if (oldTile.hasOwnProperty(key)) {
+                    level[x][y][key] = oldTile[key];
+                }
+            }
+        }
+    });
+};
+
+const decorateCaves = caves => {
+    const indeces = randRange(caves.length);
+    for (let j = 0; j < caves.length; j++) {
+        const i = indeces[j];
+        const cave = caves[i];
+        grassCave(cave);
+        if (j === 0) {
+            let {x, y} = cave.tiles[Math.floor(cave.tiles.length * Math.random())];
+            game.player.x = x;
+            game.player.y = y;
+            level[x][y].actor = game.player;
+        }
+    }
+};
+
 const createLevel = ({width, height, prng = Math.random}) => {
 	// create a 2d array to represent the level
 	level = create2dArray(width, height, "wall");
@@ -334,9 +360,10 @@ const createLevel = ({width, height, prng = Math.random}) => {
     findDeadEnds();
     fillDeadEnds();
     convert2Tiles();
-    findCave();
+    const caves = findCave();
     findExits();
-    //lightUp();
+    lightUp();
+    decorateCaves(caves);
 
 	return level;
 };
@@ -357,36 +384,4 @@ const randomTileFrom = (condition, prng) => {
 
 const empty = (x, y) => level[x][y].passable && !level[x][y].actor;
 
-const populateLevel = (player, x, y) => {
-    if (x === undefined) {
-        [x, y] = randomTileFrom(empty);
-    }
-    player.x = x;
-    player.y = y;
-    level[x][y].actor = player;
-
-    monster = createActor("mob");
-    [monster.x, monster.y] = randomTileFrom(empty);
-    level[monster.x][monster.y].actor = monster;
-    game.schedule.add(monster);
-
-    return level;
-};
-
-const available = (x, y) => {
-    return level[x][y].passable && level[x][y].actor === undefined;
-};
-
-const addStairs = () => {
-    let x = 0;
-    let y = 0;
-    while (!available(x, y)) {
-        [x, y] = randomTile();
-    }
-};
-
-const addItems = () => {
-    addStairs();
-};
-
-export {createLevel, populateLevel, addItems};
+export {createLevel};

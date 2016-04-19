@@ -36,7 +36,7 @@ const prototype = {
 		for (let y = 0; y < this.height; y++) {
 			for (let x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 				const tile = level[x][y];
-				if (true || tile.visible) {
+				if (tile.light || tile.visible) {
 					const realx = (x - (this.height - y - 1) / 2) * xu;
 					const realy = y * yu;
 					tile.drawn = false;
@@ -84,14 +84,20 @@ const prototype = {
 	cacheLevel(level) {
 		for (let x = 0; x < this.width; x++) for (let y = 0; y < this.height; y++) {
             const tile = level[x][y];
-            tile.color = tile.litColor(tile.light);
 			this.cacheTile(tile);
 		}
 	},
 	mousemove(e) {
-		const y = Math.floor((e.clientY - this.canvas.offsetTop) / this.yunit);
-		const x = Math.floor((e.clientX - this.canvas.offsetLeft) / this.xunit + (this.height - y) / 2);
-		const tile = game.level[x][y];
+		const y = Math.floor((e.clientY - this.canvas.offsetTop) / this.yunit / this.scale);
+		const x = Math.floor(((e.clientX - this.canvas.offsetLeft) / this.xunit / this.scale + (this.height - y - 1) / 2));
+		const tile = this.cacheTile({
+            spritex: 9,
+            spritey: 4,
+            color: game.level[x][y].color,
+        });
+        const realx = (x - (this.height - y - 1) / 2) * 8;
+        const realy = y * 8;
+        //this.ctx.drawImage(tile.canvas, 0, 0, 8, 8, realx, realy, 8, 8);
 	},
 };
 

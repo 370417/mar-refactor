@@ -9,9 +9,7 @@ const Tiles = {
         transparent: false,
 		spritex: 3,
 		spritey: 4,
-        litColor(light) {
-            return arr2hsl([40, Math.round(10 * light), 60 + Math.round(20 * light)]);
-        },
+        color: arr2hsl([40, 10, 75]),
 	},
     floor: {
         type: "floor",
@@ -19,10 +17,23 @@ const Tiles = {
         transparent: true,
         spritex: 1,
         spritey: 4,
-        litColor(light) {
-            if (!light) return "#FFF";
-            return arr2hsl([Math.round(360 * light), 100, 40]);
-        },
+        color: "#FFF",
+    },
+    grass: {
+        type: "grass",
+        passable: true,
+        transparent: true,
+        spritex: 5,
+        spritey: 4,
+        color: "#080",
+    },
+    tallGrass: {
+        type: "grass",
+        passable: true,
+        transparent: false,
+        spritex: 2,
+        spritey: 4,
+        color: "#080",
     },
 };
 
