@@ -125,6 +125,14 @@ const actors = {
         state: "wandering",
         wandering: tunnelWandering,
     }),
+    snake: asActor({
+        name: "snake",
+        color: "#080",
+        spritex: 5,
+        spritey: 3,
+        state: "wandering",
+        wandering: tunnelWandering,
+    }),
 };
 
 const createActor = name => {

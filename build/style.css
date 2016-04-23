@@ -1,20 +1,41 @@
 body {
 	background: #000;
 	color: #FFF;
+    font: 14px/16px Menlo, "DejaVu Sans Mono", Monaco, monospace;
+    margin: 0;
+}
+
+#game {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    margin: auto;
 }
 
 canvas {
-	position: absolute;
-	image-rendering: optimizeSpeed;            
-	image-rendering: -moz-crisp-edges;         
-	image-rendering: -o-crisp-edges;           
+	image-rendering: optimizeSpeed;
+	image-rendering: -moz-crisp-edges;
+	image-rendering: -o-crisp-edges;
 	image-rendering: -webkit-optimize-contrast;
-	image-rendering: optimize-contrast;        
-	image-rendering: crisp-edges;              
-	image-rendering: pixelated;                
-	-ms-interpolation-mode: nearest-neighbor;  
+	image-rendering: optimize-contrast;
+	image-rendering: crisp-edges;
+	image-rendering: pixelated;
+	-ms-interpolation-mode: nearest-neighbor;
 }
 
 #bgcanvas {
+    position: absolute;
+    left: 0;
 	opacity: 0.4;
+}
+
+#canvas {
+    position: relative;
+    z-index: 2;
+}
+
+#sidebar {
+    white-space: pre-wrap;
 }

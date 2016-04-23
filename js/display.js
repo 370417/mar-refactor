@@ -8,14 +8,15 @@ const prototype = {
 		this.xunit = xunit;
 		this.yunit = yunit;
 		this.scale = scale;
+        document.body.style.fontSize = 8 * scale + "px";
 		this.canvas.width = (width - height / 2 + 1) * xunit;
 		this.canvas.height = height * yunit;
-		this.canvas.style.width = (width - height / 2 + 1) * xunit * scale + "px";
-		this.canvas.style.height = height * yunit * scale + "px";
+		this.canvas.style.width = (width - height / 2 + 1) + "rem";
 		this.bgcanvas.width = (width - height / 2 + 1) * xunit;
 		this.bgcanvas.height = height * yunit;
-		this.bgcanvas.style.width = (width - height / 2 + 1) * xunit * scale + "px";
-		this.bgcanvas.style.height = height * yunit * scale + "px";
+		this.bgcanvas.style.width = (width - height / 2 + 1) + "rem";
+        this.root.style.width = this.canvas.clientWidth + "px";
+        this.root.style.height = this.canvas.clientHeight + this.sidebar.clientHeight + "px";
 	},
 	// load the spritesheet then call callback
 	load(path, callback) {
@@ -36,7 +37,7 @@ const prototype = {
 		for (let y = 0; y < this.height; y++) {
 			for (let x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 				const tile = level[x][y];
-				if (tile.light || tile.visible) {
+				if (/*tile.light || */tile.visible) {
 					const realx = (x - (this.height - y - 1) / 2) * xu;
 					const realy = y * yu;
 					tile.drawn = false;
@@ -103,26 +104,29 @@ const prototype = {
 
 export default ({root}) => {
 	const display = Object.create(prototype);
+    display.root = root;
+
+    // setup sidebar
+    display.sidebar = document.getElementById("sidebar");
 
 	// setup messages
 	display.messages = document.createElement("div");
 	display.messages.setAttribute("id", "messages");
 	root.appendChild(display.messages);
 
+	// setup canvas
+	display.canvas = document.createElement("canvas");
+    display.canvas.setAttribute("id", "canvas");
+	root.insertBefore(display.canvas, display.sidebar);
+	display.ctx = display.canvas.getContext("2d");
+
 	// setup background canvas
 	display.bgcanvas = document.createElement("canvas");
 	display.bgcanvas.setAttribute("id", "bgcanvas");
-	root.appendChild(display.bgcanvas);
+	root.insertBefore(display.bgcanvas, display.sidebar);
 	display.bgctx = display.bgcanvas.getContext("2d");
 
-	// setup canvas
-	display.canvas = document.createElement("canvas");
-	root.appendChild(display.canvas);
-	display.ctx = display.canvas.getContext("2d");
-
 	display.canvas.addEventListener("mousemove", display.mousemove.bind(display), false);
-
-	//display.log("Loading... ");
 
 	return display;
 };

@@ -45,6 +45,21 @@ const code2offset = {
 
 const keyDown = (player, e) => {
     const code = e.code || keyCode2code[e.keyCode];
+
+    // meta F for fullscreen
+    if (e.metaKey && e.keyCode === 70) {
+        const elem = document.body;
+        if (elem.requestFullscreen) {
+            elem.requestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+            elem.msRequestFullscreen();
+        } else if (elem.mozRequestFullScreen) {
+            elem.mozRequestFullScreen();
+        } else if (elem.webkitRequestFullscreen) {
+            elem.webkitRequestFullscreen();
+        }
+    }
+
     if (code2offset[code]) {
         player.move(code2offset[code]);
     }
