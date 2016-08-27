@@ -1,3 +1,5 @@
+import {line} from "./fov";
+
 const prototype = {
 	// set the dimensions of the dislpay
 	// unit is the size in pixels of a tile
@@ -15,6 +17,10 @@ const prototype = {
 		this.bgcanvas.width = (width - height / 2 + 1) * xunit;
 		this.bgcanvas.height = height * yunit;
 		this.bgcanvas.style.width = (width - height / 2 + 1) + "rem";
+        this.root.style.width = this.canvas.clientWidth + "px";
+		this.fgcanvas.width = (width - height / 2 + 1) * xunit;
+		this.fgcanvas.height = height * yunit;
+		this.fgcanvas.style.width = (width - height / 2 + 1) + "rem";
         this.root.style.width = this.canvas.clientWidth + "px";
         this.root.style.height = this.canvas.clientHeight + this.sidebar.clientHeight + "px";
 	},
@@ -88,17 +94,47 @@ const prototype = {
 			this.cacheTile(tile);
 		}
 	},
+	setMouseListener(listener) {
+		this.tileHover = listener;
+	},
+	mousex: -1,
+	mousey: -1,
 	mousemove(e) {
-		const y = Math.floor((e.clientY - this.canvas.offsetTop) / this.yunit / this.scale);
-		const x = Math.floor(((e.clientX - this.canvas.offsetLeft) / this.xunit / this.scale + (this.height - y - 1) / 2));
+		const xu = this.xunit;
+		const yu = this.yunit;
+		const parent = this.canvas.parentElement;
+		const y = Math.floor((e.clientY - parent.offsetTop) / yu / this.scale);
+		const x = Math.floor((e.clientX - parent.offsetLeft) / xu / this.scale + (this.height - y - 1) / 2);
+		if (!game.level[x] || !game.level[x][y]) {
+			return;
+		}
+		if (x !== this.mousex || y !== this.mousey) {
+			this.mousex = x;
+			this.mousey = y;
+			this.tileHover(x, y);
+		}
 		const tile = this.cacheTile({
             spritex: 9,
             spritey: 4,
             color: game.level[x][y].color,
         });
-        const realx = (x - (this.height - y - 1) / 2) * 8;
-        const realy = y * 8;
+		const realx = (x - (this.height - y - 1) / 2) * xu;
+		const realy = y * yu;
         //this.ctx.drawImage(tile.canvas, 0, 0, 8, 8, realx, realy, 8, 8);
+	},
+	clearFg() {
+		this.fgctx.clearRect(0, 0, this.width * this.xunit, this.height * this.yunit);
+	},
+	lineToMouse(x, y) {
+		const realx = (x - (this.height - y - 1) / 2) * this.xunit;
+		const realy = y * this.yunit;
+		const tile = this.cacheTile({
+            spritex: 9,
+            spritey: 4,
+            color: game.level[x][y].color,
+        });
+        this.clearFg();
+        this.fgctx.drawImage(tile.canvas, 0, 0, 8, 8, realx, realy, 8, 8);
 	},
 };
 
@@ -114,6 +150,12 @@ export default ({root}) => {
 	display.messages.setAttribute("id", "messages");
 	root.appendChild(display.messages);
 
+	// setup foreground canvas
+	display.fgcanvas = document.createElement("canvas");
+	display.fgcanvas.setAttribute("id", "fgcanvas");
+	root.insertBefore(display.fgcanvas, display.sidebar);
+	display.fgctx = display.fgcanvas.getContext("2d");
+
 	// setup canvas
 	display.canvas = document.createElement("canvas");
     display.canvas.setAttribute("id", "canvas");
@@ -126,7 +168,7 @@ export default ({root}) => {
 	root.insertBefore(display.bgcanvas, display.sidebar);
 	display.bgctx = display.bgcanvas.getContext("2d");
 
-	display.canvas.addEventListener("mousemove", display.mousemove.bind(display), false);
+	display.fgcanvas.addEventListener("mousemove", display.mousemove.bind(display), false);
 
 	return display;
 };

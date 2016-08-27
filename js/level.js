@@ -330,6 +330,13 @@ const grassCave = cave => {
                 }
             }
         }
+        if (i === 0) {
+            const snake = createActor("snake");
+            snake.x = x;
+            snake.y = y;
+            level[x][y].actor = snake;
+            game.schedule.add(snake);
+        }
     });
 };
 

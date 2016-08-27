@@ -43,11 +43,31 @@ const code2offset = {
     KeyS: [ 0, 0],
 };
 
-const keyDown = (player, e) => {
+const modes = ['playing'];
+
+const keyModes = {
+    playing: (game, code) => {
+        if (code2offset[code]) {
+            game.player.move(code2offset[code]);
+        }
+
+        if (code === 'KeyF') {
+            modes.push('firing');
+        }
+    },
+    firing: (game, code) => {
+        if (code === 'Escape') {
+            game.display.clearFg();
+            modes.pop();
+        }
+    },
+};
+
+const keyDown = (game, e) => {
     const code = e.code || keyCode2code[e.keyCode];
 
     // meta F for fullscreen
-    if (e.metaKey && e.keyCode === 70) {
+    if (e.metaKey && code === 'KeyF') {
         const elem = document.body;
         if (elem.requestFullscreen) {
             elem.requestFullscreen();
@@ -60,9 +80,20 @@ const keyDown = (player, e) => {
         }
     }
 
-    if (code2offset[code]) {
-        player.move(code2offset[code]);
-    }
+    const mode = modes[modes.length - 1];
+    keyModes[mode](game, code);
 };
 
-export {keyDown};
+const mousemoveModes = {
+    playing: (game, x, y) => {},
+    firing: (game, x, y) => {
+        game.display.lineToMouse(x, y);
+    },
+};
+
+const tileHover = (game, x, y) => {
+    const mode = modes[modes.length - 1];
+    mousemoveModes[mode](game, x, y);
+};
+
+export {keyDown, tileHover};

@@ -1,7 +1,7 @@
 import {createLevel, populateLevel, addItems} from "./level";
 import createActor from "./actor";
 import createSchedule from "./scheduler";
-import {keyDown} from "./input";
+import {keyDown, tileHover} from "./input";
 
 let game;
 
@@ -17,7 +17,8 @@ const startGame = ({seed, width, height}) => {
     game.display.cacheLevel(game.level);
 
     // add listeners
-    window.addEventListener("keydown", keyDown.bind(null, game.player));
+    window.addEventListener("keydown", keyDown.bind(null, game));
+    game.display.setMouseListener(tileHover.bind(null, game));
 
     game.player.see();
     game.schedule.advance().act();

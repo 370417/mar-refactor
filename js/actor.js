@@ -1,4 +1,5 @@
 import {fov} from "./fov";
+import {dijkstraMap} from "./pathfinding";
 
 /*const angle = (x1, y1, x2 = 1, y2 = 0) => {
     let l1 = Math.sqrt(x1 * x1 + y1 * y1);
@@ -133,11 +134,21 @@ const actors = {
         state: "wandering",
         wandering: tunnelWandering,
     }),
+    G: asActor({
+        name: 'G',
+        color: '#DDD',
+        spritex: 6,
+        spritey: 0,
+        state: 'wandering',
+        //wandering: herdWandering,
+    }),
 };
 
 const createActor = name => {
     const actor = Object.create(actors[name]);
-    game.display.cacheTile(actor);
+    if (game.display) {
+        game.display.cacheTile(actor);
+    }
     return actor;
 };
 

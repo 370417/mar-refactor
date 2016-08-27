@@ -787,12 +787,22 @@ var actors = {
         spritey: 3,
         state: "wandering",
         wandering: tunnelWandering
+    }),
+    G: asActor({
+        name: 'G',
+        color: '#DDD',
+        spritex: 6,
+        spritey: 0,
+        state: 'wandering'
     })
 };
 
+//wandering: herdWandering,
 var createActor = function createActor(name) {
     var actor = Object.create(actors[name]);
-    game.display.cacheTile(actor);
+    if (game.display) {
+        game.display.cacheTile(actor);
+    }
     return actor;
 };
 
@@ -1208,6 +1218,13 @@ var grassCave = function grassCave(cave) {
                 }
             }
         }
+        if (i === 0) {
+            var snake = createActor("snake");
+            snake.x = x;
+            snake.y = y;
+            level[x][y].actor = snake;
+            game.schedule.add(snake);
+        }
     });
 };
 
@@ -1328,11 +1345,31 @@ var code2offset = {
     KeyS: [0, 0]
 };
 
-var keyDown = function keyDown(player, e) {
+var modes = ['playing'];
+
+var keyModes = {
+    playing: function playing(game, code) {
+        if (code2offset[code]) {
+            game.player.move(code2offset[code]);
+        }
+
+        if (code === 'KeyF') {
+            modes.push('firing');
+        }
+    },
+    firing: function firing(game, code) {
+        if (code === 'Escape') {
+            game.display.clearFg();
+            modes.pop();
+        }
+    }
+};
+
+var keyDown = function keyDown(game, e) {
     var code = e.code || keyCode2code[e.keyCode];
 
     // meta F for fullscreen
-    if (e.metaKey && e.keyCode === 70) {
+    if (e.metaKey && code === 'KeyF') {
         var elem = document.body;
         if (elem.requestFullscreen) {
             elem.requestFullscreen();
@@ -1345,9 +1382,20 @@ var keyDown = function keyDown(player, e) {
         }
     }
 
-    if (code2offset[code]) {
-        player.move(code2offset[code]);
+    var mode = modes[modes.length - 1];
+    keyModes[mode](game, code);
+};
+
+var mousemoveModes = {
+    playing: function playing(game, x, y) {},
+    firing: function firing(game, x, y) {
+        game.display.lineToMouse(x, y);
     }
+};
+
+var tileHover = function tileHover(game, x, y) {
+    var mode = modes[modes.length - 1];
+    mousemoveModes[mode](game, x, y);
 };
 
 var game$2 = void 0;
@@ -1368,7 +1416,8 @@ var startGame = function startGame(_ref) {
     game$2.display.cacheLevel(game$2.level);
 
     // add listeners
-    window.addEventListener("keydown", keyDown.bind(null, game$2.player));
+    window.addEventListener("keydown", keyDown.bind(null, game$2));
+    game$2.display.setMouseListener(tileHover.bind(null, game$2));
 
     game$2.player.see();
     game$2.schedule.advance().act();
@@ -1412,6 +1461,10 @@ var prototype = {
 		this.bgcanvas.width = (width - height / 2 + 1) * xunit;
 		this.bgcanvas.height = height * yunit;
 		this.bgcanvas.style.width = width - height / 2 + 1 + "rem";
+		this.root.style.width = this.canvas.clientWidth + "px";
+		this.fgcanvas.width = (width - height / 2 + 1) * xunit;
+		this.fgcanvas.height = height * yunit;
+		this.fgcanvas.style.width = width - height / 2 + 1 + "rem";
 		this.root.style.width = this.canvas.clientWidth + "px";
 		this.root.style.height = this.canvas.clientHeight + this.sidebar.clientHeight + "px";
 	},
@@ -1490,17 +1543,48 @@ var prototype = {
 			}
 		}
 	},
+	setMouseListener: function setMouseListener(listener) {
+		this.tileHover = listener;
+	},
+
+	mousex: -1,
+	mousey: -1,
 	mousemove: function mousemove(e) {
-		var y = Math.floor((e.clientY - this.canvas.offsetTop) / this.yunit / this.scale);
-		var x = Math.floor((e.clientX - this.canvas.offsetLeft) / this.xunit / this.scale + (this.height - y - 1) / 2);
+		var xu = this.xunit;
+		var yu = this.yunit;
+		var parent = this.canvas.parentElement;
+		var y = Math.floor((e.clientY - parent.offsetTop) / yu / this.scale);
+		var x = Math.floor((e.clientX - parent.offsetLeft) / xu / this.scale + (this.height - y - 1) / 2);
+		if (!game.level[x] || !game.level[x][y]) {
+			return;
+		}
+		if (x !== this.mousex || y !== this.mousey) {
+			this.mousex = x;
+			this.mousey = y;
+			this.tileHover(x, y);
+		}
 		var tile = this.cacheTile({
 			spritex: 9,
 			spritey: 4,
 			color: game.level[x][y].color
 		});
-		var realx = (x - (this.height - y - 1) / 2) * 8;
-		var realy = y * 8;
+		var realx = (x - (this.height - y - 1) / 2) * xu;
+		var realy = y * yu;
 		//this.ctx.drawImage(tile.canvas, 0, 0, 8, 8, realx, realy, 8, 8);
+	},
+	clearFg: function clearFg() {
+		this.fgctx.clearRect(0, 0, this.width * this.xunit, this.height * this.yunit);
+	},
+	lineToMouse: function lineToMouse(x, y) {
+		var realx = (x - (this.height - y - 1) / 2) * this.xunit;
+		var realy = y * this.yunit;
+		var tile = this.cacheTile({
+			spritex: 9,
+			spritey: 4,
+			color: game.level[x][y].color
+		});
+		this.clearFg();
+		this.fgctx.drawImage(tile.canvas, 0, 0, 8, 8, realx, realy, 8, 8);
 	}
 };
 
@@ -1518,6 +1602,12 @@ var createDisplay = (function (_ref) {
 	display.messages.setAttribute("id", "messages");
 	root.appendChild(display.messages);
 
+	// setup foreground canvas
+	display.fgcanvas = document.createElement("canvas");
+	display.fgcanvas.setAttribute("id", "fgcanvas");
+	root.insertBefore(display.fgcanvas, display.sidebar);
+	display.fgctx = display.fgcanvas.getContext("2d");
+
 	// setup canvas
 	display.canvas = document.createElement("canvas");
 	display.canvas.setAttribute("id", "canvas");
@@ -1530,7 +1620,7 @@ var createDisplay = (function (_ref) {
 	root.insertBefore(display.bgcanvas, display.sidebar);
 	display.bgctx = display.bgcanvas.getContext("2d");
 
-	display.canvas.addEventListener("mousemove", display.mousemove.bind(display), false);
+	display.fgcanvas.addEventListener("mousemove", display.mousemove.bind(display), false);
 
 	return display;
 })

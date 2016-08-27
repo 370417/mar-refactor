@@ -140,4 +140,4 @@ const fov = (ox, oy, transparent, reveal) => {
     scan(1, 0, 6);
 };
 
-export {fov};
+export {fov, line};
