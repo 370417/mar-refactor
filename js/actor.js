@@ -66,7 +66,7 @@ const move = function([dx, dy]) {
             this.see();
         }
 
-        game.schedule.add(this, 100);
+        game.schedule.add(this, this.delay);
         game.schedule.advance().act();
     }
 };
@@ -92,9 +92,43 @@ const tunnelWandering = function() {
     }
 };
 
+const gasMove = function({dx, dy}) {
+    const x = this.x + dx;
+    const y = this.y + dy;
+    // count now many times this gas particle is in a tile too sparse to be gassy.
+    // after 10 or so instances, delete this gas particle
+    game.level[this.x][this.y][this.name]--;
+    this.x = x;
+    this.y = y;
+    if (game.level[this.x][this.y][this.name]) {
+        game.level[this.x][this.y][this.name]++;
+    } else {
+        game.level[this.x][this.y][this.name] = 1;
+    }
+
+    game.schedule.add(this, this.delay);
+    game.schedule.advance().act();
+};
+
+const gasMotion = function() {
+    const allMoves = [];
+    forEachNeighbor(this.x, this.y, ({x, y, dx, dy}) => {
+        if (empty(x, y)) {
+            allMoves.push({dx, dy});
+        }
+    });
+
+    if (allMoves.length) {
+        const {dx, dy} = randomElement(allMoves);
+        //console.log(dx, dy);
+        return this.move({dx, dy});
+    }
+};
+
 const baseActor = {
     act: act,
     move: move,
+    delay: 100,
     lastMove: {
         dx: 0,
         dy: 0,
@@ -141,6 +175,16 @@ const actors = {
         spritey: 0,
         state: 'wandering',
         //wandering: herdWandering,
+    }),
+    fastGas: asActor({
+        name: "fastGas",
+        color: "#FFF",
+        spritex: 0,
+        spritey: 0,
+        state: 'brownian',
+        brownian: gasMotion,
+        move: gasMove,
+        delay: 200,
     }),
 };
 

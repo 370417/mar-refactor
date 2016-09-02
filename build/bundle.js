@@ -709,7 +709,7 @@ var move = function move(_ref) {
             this.see();
         }
 
-        game.schedule.add(this, 100);
+        game.schedule.add(this, this.delay);
         game.schedule.advance().act();
     }
 };
@@ -746,9 +746,55 @@ var tunnelWandering = function tunnelWandering() {
     }
 };
 
+var gasMove = function gasMove(_ref4) {
+    var dx = _ref4.dx;
+    var dy = _ref4.dy;
+
+    var x = this.x + dx;
+    var y = this.y + dy;
+    // count now many times this gas particle is in a tile too sparse to be gassy.
+    // after 10 or so instances, delete this gas particle
+    game.level[this.x][this.y][this.name]--;
+    this.x = x;
+    this.y = y;
+    if (game.level[this.x][this.y][this.name]) {
+        game.level[this.x][this.y][this.name]++;
+    } else {
+        game.level[this.x][this.y][this.name] = 1;
+    }
+
+    game.schedule.add(this, this.delay);
+    game.schedule.advance().act();
+};
+
+var gasMotion = function gasMotion() {
+    var allMoves = [];
+    forEachNeighbor(this.x, this.y, function (_ref5) {
+        var x = _ref5.x;
+        var y = _ref5.y;
+        var dx = _ref5.dx;
+        var dy = _ref5.dy;
+
+        if (empty$1(x, y)) {
+            allMoves.push({ dx: dx, dy: dy });
+        }
+    });
+
+    if (allMoves.length) {
+        var _randomElement2 = randomElement(allMoves);
+
+        var dx = _randomElement2.dx;
+        var dy = _randomElement2.dy;
+        //console.log(dx, dy);
+
+        return this.move({ dx: dx, dy: dy });
+    }
+};
+
 var baseActor = {
     act: act,
     move: move,
+    delay: 100,
     lastMove: {
         dx: 0,
         dy: 0
@@ -794,10 +840,20 @@ var actors = {
         spritex: 6,
         spritey: 0,
         state: 'wandering'
+    }),
+    //wandering: herdWandering,
+    fastGas: asActor({
+        name: "fastGas",
+        color: "#FFF",
+        spritex: 0,
+        spritey: 0,
+        state: 'brownian',
+        brownian: gasMotion,
+        move: gasMove,
+        delay: 200
     })
 };
 
-//wandering: herdWandering,
 var createActor = function createActor(name) {
     var actor = Object.create(actors[name]);
     if (game.display) {
@@ -1218,13 +1274,13 @@ var grassCave = function grassCave(cave) {
                 }
             }
         }
-        if (i === 0) {
-            var snake = createActor("snake");
+        /*if (i === 0) {
+            const snake = createActor("snake");
             snake.x = x;
             snake.y = y;
             level[x][y].actor = snake;
             game.schedule.add(snake);
-        }
+        }*/
     });
 };
 
@@ -1233,7 +1289,9 @@ var decorateCaves = function decorateCaves(caves) {
     for (var j = 0; j < caves.length; j++) {
         var i = indeces[j];
         var cave = caves[i];
-        grassCave(cave);
+        if (Math.round(Math.random())) {
+            grassCave(cave);
+        }
         if (j === 0) {
             var _cave$tiles$Math$floo = cave.tiles[Math.floor(cave.tiles.length * Math.random())];
             var x = _cave$tiles$Math$floo.x;
@@ -1353,6 +1411,24 @@ var keyModes = {
             game.player.move(code2offset[code]);
         }
 
+        if (code === 'Space') {
+            var _game$player = game.player;
+            var x = _game$player.x;
+            var y = _game$player.y;
+
+            for (var i = 200; i > 0; i--) {
+                var gas = createActor("fastGas");
+                gas.x = x;
+                gas.y = y;
+                if (game.level[x][y]["fastGas"]) {
+                    game.level[x][y]["fastGas"]++;
+                } else {
+                    game.level[x][y]["fastGas"] = 1;
+                }
+                game.schedule.add(gas, i);
+            }
+        }
+
         if (code === 'KeyF') {
             modes.push('firing');
         }
@@ -1457,14 +1533,14 @@ var prototype = {
 		document.body.style.fontSize = 8 * scale + "px";
 		this.canvas.width = (width - height / 2 + 1) * xunit;
 		this.canvas.height = height * yunit;
-		this.canvas.style.width = width - height / 2 + 1 + "rem";
+		this.canvas.style.width = width - height / 2 + 1 + "em";
 		this.bgcanvas.width = (width - height / 2 + 1) * xunit;
 		this.bgcanvas.height = height * yunit;
-		this.bgcanvas.style.width = width - height / 2 + 1 + "rem";
+		this.bgcanvas.style.width = width - height / 2 + 1 + "em";
 		this.root.style.width = this.canvas.clientWidth + "px";
 		this.fgcanvas.width = (width - height / 2 + 1) * xunit;
 		this.fgcanvas.height = height * yunit;
-		this.fgcanvas.style.width = width - height / 2 + 1 + "rem";
+		this.fgcanvas.style.width = width - height / 2 + 1 + "em";
 		this.root.style.width = this.canvas.clientWidth + "px";
 		this.root.style.height = this.canvas.clientHeight + this.sidebar.clientHeight + "px";
 	},
@@ -1494,8 +1570,12 @@ var prototype = {
 					var realx = (x - (this.height - y - 1) / 2) * xu;
 					var realy = y * yu;
 					tile.drawn = false;
-					this.ctx.fillStyle = "#000";
-					this.ctx.fillRect(realx, realy, xu, yu);
+					if (tile.fastGas) {
+						this.ctx.fillStyle = 'rgba(255, 255, 255, ' + (1 - Math.pow(2, -tile.fastGas / 10)) + ')';
+						this.ctx.fillRect(realx, realy, xu, yu);
+					} else {
+						this.ctx.fillStyle = '#000';
+					}
 					if (tile.actor) {
 						this.ctx.drawImage(tile.actor.canvas, 0, 0, xu, yu, realx, realy, xu, yu);
 					} else {

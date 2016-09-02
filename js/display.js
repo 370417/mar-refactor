@@ -13,14 +13,14 @@ const prototype = {
         document.body.style.fontSize = 8 * scale + "px";
 		this.canvas.width = (width - height / 2 + 1) * xunit;
 		this.canvas.height = height * yunit;
-		this.canvas.style.width = (width - height / 2 + 1) + "rem";
+		this.canvas.style.width = (width - height / 2 + 1) + "em";
 		this.bgcanvas.width = (width - height / 2 + 1) * xunit;
 		this.bgcanvas.height = height * yunit;
-		this.bgcanvas.style.width = (width - height / 2 + 1) + "rem";
+		this.bgcanvas.style.width = (width - height / 2 + 1) + "em";
         this.root.style.width = this.canvas.clientWidth + "px";
 		this.fgcanvas.width = (width - height / 2 + 1) * xunit;
 		this.fgcanvas.height = height * yunit;
-		this.fgcanvas.style.width = (width - height / 2 + 1) + "rem";
+		this.fgcanvas.style.width = (width - height / 2 + 1) + "em";
         this.root.style.width = this.canvas.clientWidth + "px";
         this.root.style.height = this.canvas.clientHeight + this.sidebar.clientHeight + "px";
 	},
@@ -47,8 +47,12 @@ const prototype = {
 					const realx = (x - (this.height - y - 1) / 2) * xu;
 					const realy = y * yu;
 					tile.drawn = false;
-					this.ctx.fillStyle = "#000";
-					this.ctx.fillRect(realx, realy, xu, yu);
+					if (tile.fastGas) {
+						this.ctx.fillStyle = 'rgba(255, 255, 255, ' + (1 - Math.pow(2, -tile.fastGas/10)) + ')';
+						this.ctx.fillRect(realx, realy, xu, yu);
+					} else {
+						this.ctx.fillStyle = '#000';
+					}
 					if (tile.actor) {
 						this.ctx.drawImage(tile.actor.canvas, 0, 0, xu, yu, realx, realy, xu, yu);
 					} else {

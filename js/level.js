@@ -330,13 +330,13 @@ const grassCave = cave => {
                 }
             }
         }
-        if (i === 0) {
+        /*if (i === 0) {
             const snake = createActor("snake");
             snake.x = x;
             snake.y = y;
             level[x][y].actor = snake;
             game.schedule.add(snake);
-        }
+        }*/
     });
 };
 
@@ -345,7 +345,9 @@ const decorateCaves = caves => {
     for (let j = 0; j < caves.length; j++) {
         const i = indeces[j];
         const cave = caves[i];
-        grassCave(cave);
+        if (Math.round(Math.random())) {
+            grassCave(cave);
+        }
         if (j === 0) {
             let {x, y} = cave.tiles[Math.floor(cave.tiles.length * Math.random())];
             game.player.x = x;

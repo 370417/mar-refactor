@@ -1,3 +1,5 @@
+import createActor from "./actor";
+
 const keyCode2code = {
     '27': 'Escape',
     '32': 'Space',
@@ -49,6 +51,21 @@ const keyModes = {
     playing: (game, code) => {
         if (code2offset[code]) {
             game.player.move(code2offset[code]);
+        }
+
+        if (code === 'Space') {
+            const {x, y} = game.player;
+            for (let i = 200; i > 0; i--) {
+                const gas = createActor("fastGas");
+                gas.x = x;
+                gas.y = y;
+                if (game.level[x][y]["fastGas"]) {
+                    game.level[x][y]["fastGas"]++;
+                } else {
+                    game.level[x][y]["fastGas"] = 1;
+                }
+                game.schedule.add(gas, i);
+            }
         }
 
         if (code === 'KeyF') {
