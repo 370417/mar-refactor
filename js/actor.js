@@ -36,6 +36,7 @@ const randInt = (lower, upper, prng = Math.random) => {
 const randomElement = (array, prng = Math.random) => array[randInt(0, array.length - 1, prng)];
 
 const playerAct = function() {
+    this.see();
     game.display.draw(game.level);
 };
 
@@ -113,7 +114,7 @@ const gasMove = function({dx, dy}) {
 const gasMotion = function() {
     const allMoves = [];
     forEachNeighbor(this.x, this.y, ({x, y, dx, dy}) => {
-        if (empty(x, y)) {
+        if (game.level[x][y].permeable) {
             allMoves.push({dx, dy});
         }
     });

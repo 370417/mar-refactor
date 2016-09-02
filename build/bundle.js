@@ -57,6 +57,7 @@ var Tiles = {
     wall: {
         type: "wall",
         passable: false,
+        permeable: false,
         transparent: false,
         spritex: 3,
         spritey: 4,
@@ -65,6 +66,7 @@ var Tiles = {
     floor: {
         type: "floor",
         passable: true,
+        permeable: true,
         transparent: true,
         spritex: 1,
         spritey: 4,
@@ -73,6 +75,7 @@ var Tiles = {
     grass: {
         type: "grass",
         passable: true,
+        permeable: true,
         transparent: true,
         spritex: 5,
         spritey: 4,
@@ -81,10 +84,29 @@ var Tiles = {
     tallGrass: {
         type: "grass",
         passable: true,
+        permeable: true,
         transparent: false,
         spritex: 2,
         spritey: 4,
         color: "#080"
+    },
+    deepWater: {
+        type: 'deepWater',
+        passable: true,
+        permeable: true,
+        transparent: true,
+        spritex: 10,
+        spritey: 4,
+        color: '#008'
+    },
+    water: {
+        type: 'water',
+        passable: true,
+        permeable: true,
+        transparent: true,
+        spritex: 10,
+        spritey: 4,
+        color: '#88F'
     }
 };
 
@@ -671,6 +693,7 @@ var randomElement = function randomElement(array) {
 };
 
 var playerAct = function playerAct() {
+    this.see();
     game.display.draw(game.level);
 };
 
@@ -775,7 +798,7 @@ var gasMotion = function gasMotion() {
         var dx = _ref5.dx;
         var dy = _ref5.dy;
 
-        if (empty$1(x, y)) {
+        if (game.level[x][y].permeable) {
             allMoves.push({ dx: dx, dy: dy });
         }
     });
@@ -1250,38 +1273,54 @@ var lightUp = function lightUp() {
     normalizeLight(maxLight);
 };
 
-var grassCave = function grassCave(cave) {
-    var chanceA = Math.random();
-    var chanceB = Math.random();
-    var tallGrassChance = Math.min(chanceA, chanceB);
-    var grassChance = Math.max(chanceA, chanceB);
+var lakeCave = function lakeCave(cave) {
+    var center = void 0;
     cave.tiles.sort(function (a, b) {
         return level[b.x][b.y].light - level[a.x][a.y].light;
-    }).forEach(function (_ref15, i) {
-        var x = _ref15.x;
-        var y = _ref15.y;
+    });
+    for (var i = 0; i < cave.tiles.length; i++) {
+        var tile = cave.tiles[i];
+        var x = tile.x;
+        var y = tile.y;
 
-        var oldTile = level[x][y];
-        if (i < cave.tiles.length * tallGrassChance) {
-            level[x][y] = createTile("tallGrass");
-        } else if (i < cave.tiles.length * grassChance) {
-            level[x][y] = createTile("grass");
+        var wallCount = countNeighbor(function (tile) {
+            return tile.type === 'wall';
+        }, x, y);
+        if (wallCount === 0) {
+            center = tile;
+            break;
         }
-        if (level[x][y] !== oldTile) {
-            for (key in oldTile) {
-                if (oldTile.hasOwnProperty(key)) {
-                    level[x][y][key] = oldTile[key];
-                }
+    }
+    var cx = center.x;
+    var cy = center.y;
+    level[cx][cy] = createTile('deepWater');
+
+    var indeces = randRange(cave.tiles.length);
+    for (var k = 0; k < Math.pow(cave.tiles.length, 1 / 3); k++) {
+        for (var j = 0; j < cave.tiles.length; j++) {
+            var _i = indeces[j];
+            var _tile = cave.tiles[_i];
+            var x = _tile.x;
+            var y = _tile.y;
+
+
+            var _wallCount = countNeighbor(function (tile) {
+                return tile.type === 'wall';
+            }, x, y);
+            var deepWaterCount = countNeighbor(function (tile) {
+                return tile.type === 'deepWater';
+            }, x, y);
+            var waterCount = countNeighbor(function (tile) {
+                return tile.type === 'water';
+            }, x, y);
+            var waterScore = waterCount + deepWaterCount * 2;
+            if (waterScore >= 6 && _wallCount === 0) {
+                level[x][y] = createTile('deepWater');
+            } else if (waterScore >= 2) {
+                level[x][y] = createTile('water');
             }
         }
-        /*if (i === 0) {
-            const snake = createActor("snake");
-            snake.x = x;
-            snake.y = y;
-            level[x][y].actor = snake;
-            game.schedule.add(snake);
-        }*/
-    });
+    }
 };
 
 var decorateCaves = function decorateCaves(caves) {
@@ -1289,9 +1328,11 @@ var decorateCaves = function decorateCaves(caves) {
     for (var j = 0; j < caves.length; j++) {
         var i = indeces[j];
         var cave = caves[i];
-        if (Math.round(Math.random())) {
-            grassCave(cave);
-        }
+        //if (Math.round(Math.random())) {
+        //    grassCave(cave);
+        //} else {
+        lakeCave(cave);
+        //}
         if (j === 0) {
             var _cave$tiles$Math$floo = cave.tiles[Math.floor(cave.tiles.length * Math.random())];
             var x = _cave$tiles$Math$floo.x;
@@ -1572,10 +1613,10 @@ var prototype = {
 					tile.drawn = false;
 					if (tile.fastGas) {
 						this.ctx.fillStyle = 'rgba(255, 255, 255, ' + (1 - Math.pow(2, -tile.fastGas / 10)) + ')';
-						this.ctx.fillRect(realx, realy, xu, yu);
 					} else {
 						this.ctx.fillStyle = '#000';
 					}
+					this.ctx.fillRect(realx, realy, xu, yu);
 					if (tile.actor) {
 						this.ctx.drawImage(tile.actor.canvas, 0, 0, xu, yu, realx, realy, xu, yu);
 					} else {

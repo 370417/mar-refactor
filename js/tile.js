@@ -6,6 +6,7 @@ const Tiles = {
 	wall: {
         type: "wall",
         passable: false,
+        permeable: false,
         transparent: false,
 		spritex: 3,
 		spritey: 4,
@@ -14,6 +15,7 @@ const Tiles = {
     floor: {
         type: "floor",
         passable: true,
+        permeable: true,
         transparent: true,
         spritex: 1,
         spritey: 4,
@@ -22,6 +24,7 @@ const Tiles = {
     grass: {
         type: "grass",
         passable: true,
+        permeable: true,
         transparent: true,
         spritex: 5,
         spritey: 4,
@@ -30,10 +33,29 @@ const Tiles = {
     tallGrass: {
         type: "grass",
         passable: true,
+        permeable: true,
         transparent: false,
         spritex: 2,
         spritey: 4,
         color: "#080",
+    },
+    deepWater: {
+        type: 'deepWater',
+        passable: true,
+        permeable: true,
+        transparent: true,
+        spritex: 10,
+        spritey: 4,
+        color: '#008',
+    },
+    water: {
+        type: 'water',
+        passable: true,
+        permeable: true,
+        transparent: true,
+        spritex: 10,
+        spritey: 4,
+        color: '#88F',
     },
 };
 

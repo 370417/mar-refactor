@@ -340,14 +340,54 @@ const grassCave = cave => {
     });
 };
 
+const lakeCave = cave => {
+    let center;
+    cave.tiles.sort((a, b) => {
+        return level[b.x][b.y].light - level[a.x][a.y].light;
+    });
+    for (let i = 0; i < cave.tiles.length; i++) {
+        const tile = cave.tiles[i];
+        const {x, y} = tile;
+        const wallCount = countNeighbor(tile => tile.type === 'wall', x, y);
+        if (wallCount === 0) {
+            center = tile;
+            break;
+        }
+    }
+    const cx = center.x;
+    const cy = center.y;
+    level[cx][cy] = createTile('deepWater');
+
+    const indeces = randRange(cave.tiles.length);
+    for (let k = 0; k < Math.pow(cave.tiles.length, 1/3); k++) {
+        for (let j = 0; j < cave.tiles.length; j++) {
+            const i = indeces[j];
+            const tile = cave.tiles[i];
+            const {x, y} = tile;
+
+            const wallCount = countNeighbor(tile => tile.type === 'wall', x, y);
+            const deepWaterCount = countNeighbor(tile => tile.type === 'deepWater', x, y);
+            const waterCount = countNeighbor(tile => tile.type === 'water', x, y);
+            const waterScore = waterCount + deepWaterCount * 2;
+            if (waterScore >= 6 && wallCount === 0) {
+                level[x][y] = createTile('deepWater');
+            } else if (waterScore >= 2) {
+                level[x][y] = createTile('water');
+            }
+        }
+    }
+};
+
 const decorateCaves = caves => {
     const indeces = randRange(caves.length);
     for (let j = 0; j < caves.length; j++) {
         const i = indeces[j];
         const cave = caves[i];
-        if (Math.round(Math.random())) {
-            grassCave(cave);
-        }
+        //if (Math.round(Math.random())) {
+        //    grassCave(cave);
+        //} else {
+            lakeCave(cave);
+        //}
         if (j === 0) {
             let {x, y} = cave.tiles[Math.floor(cave.tiles.length * Math.random())];
             game.player.x = x;

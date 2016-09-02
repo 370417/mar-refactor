@@ -49,10 +49,10 @@ const prototype = {
 					tile.drawn = false;
 					if (tile.fastGas) {
 						this.ctx.fillStyle = 'rgba(255, 255, 255, ' + (1 - Math.pow(2, -tile.fastGas/10)) + ')';
-						this.ctx.fillRect(realx, realy, xu, yu);
 					} else {
 						this.ctx.fillStyle = '#000';
 					}
+					this.ctx.fillRect(realx, realy, xu, yu);
 					if (tile.actor) {
 						this.ctx.drawImage(tile.actor.canvas, 0, 0, xu, yu, realx, realy, xu, yu);
 					} else {
