@@ -15,6 +15,7 @@ body {
 }
 
 canvas {
+    position: absolute;
 	image-rendering: optimizeSpeed;
 	image-rendering: -moz-crisp-edges;
 	image-rendering: -o-crisp-edges;
@@ -23,46 +24,4 @@ canvas {
 	image-rendering: crisp-edges;
 	image-rendering: pixelated;
 	-ms-interpolation-mode: nearest-neighbor;
-}
-
-#bgcanvas {
-    position: absolute;
-    left: 0;
-	opacity: 0.4;
-}
-
-#canvas {
-    position: relative;
-    z-index: 2;
-}
-
-#fgcanvas {
-    position: absolute;
-    left: 0;
-    z-index: 3;
-}
-
-#sidebar {
-    position: absolute;
-    right: 0;
-    top: 0;
-    width: 200px;
-}
-
-#sidebar > div {
-    margin-bottom: 16px;
-    opacity: 0.6;
-}
-
-ul {
-    margin: 0;
-    padding: 0;
-}
-
-li {
-    display: block;
-}
-
-li div {
-    float: right;
 }

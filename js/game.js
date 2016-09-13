@@ -1,38 +1,30 @@
-import {createLevel, populateLevel, addItems} from "./level";
-import createActor from "./actor";
-import createSchedule from "./scheduler";
-import {keyDown, tileHover, tileClick} from "./input";
+import {forEachTileOfLevel, createLevel} from './level';
 
-let game;
+// prevent using Math.random instead of prng accidentally
+Math.random = undefined;
 
-const startGame = ({seed, width, height}) => {
-    window.game = game;
+export default ({
+    width,
+    height,
+    prng,
+    updateTile,
+    updateDraw,
+}) => {
+    const game = {};
 
-    game.player = createActor("player");
+    const forEachTile = forEachTileOfLevel.bind(null, width, height);
 
-    game.schedule = createSchedule();
-    game.schedule.add(game.player);
-
-    game.level = createLevel({width, height});
-    game.display.cacheLevel(game.level);
-
-    // add listeners
-    window.addEventListener("keydown", keyDown.bind(null, game));
-    game.display.setMouseListener(tileHover.bind(null, game));
-    game.display.tileClick = tileClick.bind(null, game);
-
-    game.player.see();
-    game.schedule.advance().act();
-};
-
-export default ({seed = 0, display, width = 48, height = 30}) => {
-    game = {
-        seed,
-        display,
+    let level = createLevel({
         width,
         height,
-    };
+        prng,
+    });
 
-	display.setDimensions(width, height, 18, 16, 1);
-	display.load("tileset2.png", startGame.bind(null, {seed, width, height}));
+    forEachTile((x, y) => {
+        updateTile(x, y, {
+            type: level[x][y].type,
+        });
+    });
+
+    updateDraw();
 };
