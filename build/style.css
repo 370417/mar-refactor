@@ -1,6 +1,6 @@
 body {
 	background: #000;
-	color: #FFF;
+	color: hsl(40, 10%, 75%);
     font: 14px/16px Menlo, "DejaVu Sans Mono", Monaco, monospace;
     margin: 0;
 }
@@ -43,5 +43,26 @@ canvas {
 }
 
 #sidebar {
-    white-space: pre-wrap;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 200px;
+}
+
+#sidebar > div {
+    margin-bottom: 16px;
+    opacity: 0.6;
+}
+
+ul {
+    margin: 0;
+    padding: 0;
+}
+
+li {
+    display: block;
+}
+
+li div {
+    float: right;
 }

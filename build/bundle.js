@@ -53,15 +53,19 @@ var arr2hsl = function arr2hsl(_ref3) {
     return "hsl(" + h + "," + s + "%," + l + "%)";
 };
 
+var wallColor = arr2hsl([40, 10, 75]);
+
+var grassColor = 'hsl(120, 50%, 50%)';
+
 var Tiles = {
     wall: {
         type: "wall",
         passable: false,
         permeable: false,
         transparent: false,
-        spritex: 3,
-        spritey: 4,
-        color: arr2hsl([40, 10, 75])
+        spritex: 0,
+        spritey: 0,
+        color: wallColor
     },
     floor: {
         type: "floor",
@@ -69,7 +73,7 @@ var Tiles = {
         permeable: true,
         transparent: true,
         spritex: 1,
-        spritey: 4,
+        spritey: 0,
         color: "#FFF"
     },
     grass: {
@@ -77,18 +81,18 @@ var Tiles = {
         passable: true,
         permeable: true,
         transparent: true,
-        spritex: 5,
-        spritey: 4,
-        color: "#080"
+        spritex: 2,
+        spritey: 0,
+        color: grassColor
     },
     tallGrass: {
         type: "grass",
         passable: true,
         permeable: true,
         transparent: false,
-        spritex: 2,
-        spritey: 4,
-        color: "#080"
+        spritex: 3,
+        spritey: 0,
+        color: grassColor
     },
     deepWater: {
         type: 'deepWater',
@@ -107,12 +111,107 @@ var Tiles = {
         spritex: 10,
         spritey: 4,
         color: '#88F'
+    },
+    pillar: {
+        type: 'pillar',
+        passable: false,
+        permeable: false,
+        transparent: false,
+        spritex: 5,
+        spritey: 0,
+        color: wallColor
+    },
+    crackedPillar: {
+        type: 'crackedPillar',
+        passable: false,
+        permeable: true,
+        transparent: false,
+        spritex: 6,
+        spritey: 0,
+        color: wallColor
+    },
+    brokenPillar: {
+        type: 'brokenPillar',
+        passable: false,
+        permeable: true,
+        transparent: true,
+        spritex: 7,
+        spritey: 0,
+        color: wallColor
     }
 };
 
 var createTile = (function (name) {
-    return Object.create(Tiles[name]);
+    var tile = Object.create(Tiles[name]);
+    tile.location = {};
+    return tile;
 })
+
+var cubeDistance = function cubeDistance(x1, y1, z1, x2, y2, z2) {
+    return Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2), Math.abs(z1 - z2));
+};
+
+var cubeRound = function cubeRound(_ref) {
+    var x = _ref.x;
+    var y = _ref.y;
+    var z = _ref.z;
+
+    var _map = [x, y, z].map(Math.round);
+
+    var _map2 = babelHelpers.slicedToArray(_map, 3);
+
+    var rx = _map2[0];
+    var ry = _map2[1];
+    var rz = _map2[2];
+
+    var _map3 = [rx - x, ry - y, rz - z].map(Math.abs);
+
+    var _map4 = babelHelpers.slicedToArray(_map3, 3);
+
+    var dx = _map4[0];
+    var dy = _map4[1];
+    var dz = _map4[2];
+
+
+    if (dx > dy && dx > dz) {
+        rx = -ry - rz;
+    } else if (dy > dz) {
+        ry = -rx - rz;
+    } else {
+        rz = -rx - ry;
+    }
+    return { x: rx, y: ry, z: rz };
+};
+
+var line = function line(x1, y1, x2, y2, callback) {
+    var skip = arguments.length <= 5 || arguments[5] === undefined ? 0 : arguments[5];
+
+    var z1 = -x1 - y1;
+    var z2 = -x2 - y2;
+    var dist = cubeDistance(x1, y1, z1, x2, y2, z2);
+    var x = x1;
+    var y = y1;
+    var z = z1;
+
+    var _map5 = [x2 - x1, y2 - y1, z2 - z1].map(function (n) {
+        return n / dist;
+    });
+
+    var _map6 = babelHelpers.slicedToArray(_map5, 3);
+
+    var dx = _map6[0];
+    var dy = _map6[1];
+    var dz = _map6[2];
+
+    for (var i = 0; i <= dist; i++) {
+        if (i >= skip && callback(cubeRound({ x: x, y: y, z: z }))) {
+            break;
+        }
+        x += dx;
+        y += dy;
+        z += dz;
+    }
+};
 
 // displacement vector for moving tangent to a circle counterclockwise in a certain sector
 var tangent = [[0, -1], //  \
@@ -140,6 +239,8 @@ var roundTieDown = function roundTieDown(n) {
 };
 
 var fov = function fov(ox, oy, transparent, reveal) {
+    var range = arguments.length <= 4 || arguments[4] === undefined ? 9e9 : arguments[4];
+
     reveal(ox, oy);
 
     var revealWall = function revealWall(x, y) {
@@ -162,6 +263,9 @@ var fov = function fov(ox, oy, transparent, reveal) {
     // radius - radius of arc
     // start & end - angles for start and end of arc
     var scan = function scan(radius, start, end) {
+        if (radius > range) {
+            return;
+        }
         var someRevealed = false;
 
         var _polar2rect = polar2rect(radius, start);
@@ -179,23 +283,25 @@ var fov = function fov(ox, oy, transparent, reveal) {
                 if (current >= start && current <= end) {
                     reveal(x, y);
                     someRevealed = true;
-                    if (current >= 0 && current <= 2) {
-                        revealWall(x + 1, y - 1);
-                    }
-                    if (current >= 1 && current <= 3) {
-                        revealWall(x, y - 1);
-                    }
-                    if (current >= 2 && current <= 4) {
-                        revealWall(x - 1, y);
-                    }
-                    if (current >= 3 && current <= 5) {
-                        revealWall(x - 1, y + 1);
-                    }
-                    if (current >= 4 && current <= 6) {
-                        revealWall(x, y + 1);
-                    }
-                    if (current <= 1 || current >= 5) {
-                        revealWall(x + 1, y);
+                    if (radius < range) {
+                        if (current >= 0 && current <= 2) {
+                            revealWall(x + 1, y - 1);
+                        }
+                        if (current >= 1 && current <= 3) {
+                            revealWall(x, y - 1);
+                        }
+                        if (current >= 2 && current <= 4) {
+                            revealWall(x - 1, y);
+                        }
+                        if (current >= 3 && current <= 5) {
+                            revealWall(x - 1, y + 1);
+                        }
+                        if (current >= 4 && current <= 6) {
+                            revealWall(x, y + 1);
+                        }
+                        if (current <= 1 || current >= 5) {
+                            revealWall(x + 1, y);
+                        }
                     }
                 }
             } else {
@@ -765,13 +871,90 @@ var tunnelWandering = function tunnelWandering() {
 
         return this.move([dx, dy]);
     } else {
-        console.error("Oops stuck");
+        return this.move([0, 0]);
     }
 };
 
-var gasMove = function gasMove(_ref4) {
-    var dx = _ref4.dx;
-    var dy = _ref4.dy;
+var snakeWandering = function snakeWandering() {
+    var allMoves = [];
+    forEachNeighbor(this.x, this.y, function (_ref4) {
+        var dx = _ref4.dx;
+        var dy = _ref4.dy;
+        var x = _ref4.x;
+        var y = _ref4.y;
+        var tile = _ref4.tile;
+
+        if (empty$1(x, y) && tile.location.cave) {
+            allMoves.push({ dx: dx, dy: dy });
+            if (tile.type === 'grass') {
+                allMoves.push({ dx: dx, dy: dy });
+            }
+        }
+    });
+
+    if (allMoves.length) {
+        var _randomElement2 = randomElement(allMoves);
+
+        var dx = _randomElement2.dx;
+        var dy = _randomElement2.dy;
+
+        return this.move([dx, dy]);
+    } else {
+        return this.move([0, 0]);
+    }
+};
+
+var wandering = function wandering() {
+    var _this2 = this;
+
+    if (!this.goalTile) {
+        var x = this.x;
+        var y = this.y;
+
+        var tiles = game.level[x][y].location.cave.tiles;
+        this.goalTile = tiles[randInt$1(0, tiles.length - 1)];
+    }
+    var goalx = this.goalTile.x;
+    var goaly = this.goalTile.y;
+    if (this.x === goalx && this.y === goaly) {
+        this.state = 'resting';
+        return this.move([0, 0]);
+    }
+    var dx = void 0,
+        dy = void 0;
+    line(this.x, this.y, goalx, goaly, function (_ref5) {
+        var x = _ref5.x;
+        var y = _ref5.y;
+
+        dx = x - _this2.x;
+        dy = y - _this2.y;
+        return true;
+    }, 1);
+    if (empty$1(this.x + dx, this.y + dy) && game.level[this.x + dx][this.y + dy].location.cave) {
+        return this.move([dx, dy]);
+    } else {
+        this.state = 'resting';
+        return this.move([0, 0]);
+    }
+};
+
+var resting = function resting() {
+    if (Math.random() < 1 / 3) {
+        var x = this.x;
+        var y = this.y;
+
+        var tiles = game.level[x][y].location.cave.tiles;
+        this.goalTile = tiles[randInt$1(0, tiles.length - 1)];
+        this.state = 'wandering';
+        return this.act();
+    } else {
+        return this.move([0, 0]);
+    }
+};
+
+var gasMove = function gasMove(_ref6) {
+    var dx = _ref6.dx;
+    var dy = _ref6.dy;
 
     var x = this.x + dx;
     var y = this.y + dy;
@@ -790,27 +973,43 @@ var gasMove = function gasMove(_ref4) {
     game.schedule.advance().act();
 };
 
-var gasMotion = function gasMotion() {
-    var allMoves = [];
-    forEachNeighbor(this.x, this.y, function (_ref5) {
-        var x = _ref5.x;
-        var y = _ref5.y;
-        var dx = _ref5.dx;
-        var dy = _ref5.dy;
-
+/*const gasMotion = function() {
+    const allMoves = [{dx: 0, dy: 0}];
+    forEachNeighbor(this.x, this.y, ({x, y, dx, dy}) => {
         if (game.level[x][y].permeable) {
-            allMoves.push({ dx: dx, dy: dy });
+            allMoves.push({dx, dy});
         }
     });
 
     if (allMoves.length) {
-        var _randomElement2 = randomElement(allMoves);
+        const {dx, dy} = randomElement(allMoves);
+        return this.move({dx, dy});
+    }
+};*/
 
-        var dx = _randomElement2.dx;
-        var dy = _randomElement2.dy;
-        //console.log(dx, dy);
-
-        return this.move({ dx: dx, dy: dy });
+var skunkGasMotion = function skunkGasMotion() {
+    this.delay += 10 + 11 * Math.floor(Math.random());
+    var dx = void 0,
+        dy = void 0;
+    if (Math.random() < Math.pow(this.age / this.directions.length, 2)) {
+        var rand = randInt$1(0, 5);
+        dx = xDir$2[rand];
+        dy = yDir$2[rand];
+    } else {
+        var _directions$age = this.directions[this.age];
+        dx = _directions$age.dx;
+        dy = _directions$age.dy;
+    }
+    this.age++;
+    if (!game.level[this.x + dx][this.y + dy].permeable) {
+        dx = 0;
+        dy = 0;
+    }
+    if (this.delay * Math.random() > 85) {
+        game.level[this.x][this.y][this.name]--;
+        return game.schedule.advance().act();
+    } else {
+        this.move({ dx: dx, dy: dy });
     }
 };
 
@@ -836,8 +1035,8 @@ var actors = {
     player: asActor({
         name: "player",
         color: "white",
-        spritex: 6,
-        spritey: 4,
+        spritex: 0,
+        spritey: 1,
         see: see,
         act: playerAct
     }),
@@ -851,10 +1050,35 @@ var actors = {
     }),
     snake: asActor({
         name: "snake",
-        color: "#080",
-        spritex: 5,
-        spritey: 3,
+        color: "hsl(40, 100%, 80%)",
+        spritex: 2,
+        spritey: 2,
         state: "wandering",
+        wandering: snakeWandering
+    }),
+    skunk: asActor({
+        name: 'skunk',
+        color: '#F00',
+        spritex: 0,
+        spritey: 2,
+        state: 'wandering',
+        wandering: wandering,
+        resting: resting
+    }),
+    rat: asActor({
+        name: 'rat',
+        color: 'hsl(40, 40%, 50%)',
+        spritex: 1,
+        spritey: 2,
+        state: 'wandering',
+        wandering: tunnelWandering
+    }),
+    albinoRat: asActor({
+        name: 'rat',
+        color: '#FFF',
+        spritex: 1,
+        spritey: 2,
+        state: 'wandering',
         wandering: tunnelWandering
     }),
     G: asActor({
@@ -865,7 +1089,7 @@ var actors = {
         state: 'wandering'
     }),
     //wandering: herdWandering,
-    fastGas: asActor({
+    /*fastGas: asActor({
         name: "fastGas",
         color: "#FFF",
         spritex: 0,
@@ -873,7 +1097,17 @@ var actors = {
         state: 'brownian',
         brownian: gasMotion,
         move: gasMove,
-        delay: 200
+        delay: 200,
+    }),*/
+    skunkGas: asActor({
+        name: 'skunkGas',
+        color: '#FFF',
+        spritex: 4,
+        spritey: 0,
+        state: 'brownian',
+        brownian: skunkGasMotion,
+        move: gasMove,
+        delay: 50
     })
 };
 
@@ -1159,7 +1393,7 @@ var findCave = function findCave() {
 
     caveMap.forEach(function (node) {
         if (node.cost > 1) {
-            level[node.x][node.y].cave = true;
+            level[node.x][node.y].location.cave = true;
         }
     });
 
@@ -1169,8 +1403,8 @@ var findCave = function findCave() {
         var y = _ref8.y;
         var tile = _ref8.tile;
 
-        if (tile.passable && !tile.cavev && countNeighbor(function (node) {
-            return node.cave;
+        if (tile.passable && !tile.location.cave && countNeighbor(function (node) {
+            return node.location.cave;
         }, x, y)) {
             tile.potentialCave = true;
         }
@@ -1185,12 +1419,12 @@ var findCave = function findCave() {
         var y = _ref9.y;
 
         if (tile.potentialCave) {
-            tile.cave = true;
+            tile.location.cave = true;
         }
     });
 
     var isCave = function isCave(x, y) {
-        return level[x][y].cave === true;
+        return level[x][y].location.cave === true;
     };
 
     // floodfill to group caves
@@ -1199,7 +1433,7 @@ var findCave = function findCave() {
         var x = _ref10.x;
         var y = _ref10.y;
 
-        if (level[x][y].cave === true) {
+        if (level[x][y].location.cave === true) {
             (function () {
                 var cave = {
                     size: 0,
@@ -1207,7 +1441,7 @@ var findCave = function findCave() {
                 };
                 caves.push(cave);
                 floodFill(x, y, isCave, function (x, y) {
-                    level[x][y].cave = cave;
+                    level[x][y].location.cave = cave;
                     cave.size++;
                     cave.tiles.push({ x: x, y: y });
                 });
@@ -1224,16 +1458,26 @@ var findExits = function findExits() {
         var x = _ref11.x;
         var y = _ref11.y;
 
-        tile.light = 0;
-        if (tile.passable && !tile.cave && countNeighbor(function (node) {
-            return node.cave;
+        tile.location.light = 0;
+        if (tile.passable && !tile.location.cave && countNeighbor(function (node) {
+            return node.location.cave;
         }, x, y)) {
-            if (countNeighbor(function (node) {
-                return node.passable && !node.cave;
-            }, x, y)) {
-                tile.exit = true;
-            } else {
-                tile.cave = true;
+            var cave = void 0;
+            for (var i = 0; i < 6; i++) {
+                var x2 = x + xDir[i];
+                var y2 = y + yDir[i];
+                var neighbor = level[x2][y2];
+                if (neighbor.passable) {
+                    if (neighbor.location.cave) {
+                        cave = neighbor.location.cave;
+                    } else {
+                        tile.location.exit = true;
+                        break;
+                    }
+                }
+            }
+            if (!tile.location.exit) {
+                tile.location.cave = cave;
             }
         }
     });
@@ -1243,7 +1487,7 @@ var normalizeLight = function normalizeLight(maxLight) {
     forEachTile(function (_ref12) {
         var tile = _ref12.tile;
 
-        tile.light /= maxLight;
+        tile.location.light /= maxLight;
     });
 };
 
@@ -1252,7 +1496,7 @@ var lightUp = function lightUp() {
         var x = _ref13.x;
         var y = _ref13.y;
 
-        level[x][y].light = level[x][y].light || 0;
+        level[x][y].location.light = level[x][y].location.light || 0;
     });
     var maxLight = 0;
     forEachTile(function (_ref14) {
@@ -1263,9 +1507,9 @@ var lightUp = function lightUp() {
             fov(x, y, function (x, y) {
                 return level[x][y].transparent;
             }, function (x, y) {
-                level[x][y].light++;
-                if (level[x][y].light > maxLight) {
-                    maxLight = level[x][y].light;
+                level[x][y].location.light++;
+                if (level[x][y].location.light > maxLight) {
+                    maxLight = level[x][y].location.light;
                 }
             });
         }
@@ -1273,83 +1517,127 @@ var lightUp = function lightUp() {
     normalizeLight(maxLight);
 };
 
-var lakeCave = function lakeCave(cave) {
-    var center = void 0;
+var grassCave = function grassCave(cave) {
+    var chanceA = Math.random();
+    var chanceB = Math.random();
+    var tallGrassChance = Math.min(chanceA, chanceB);
+    var grassChance = Math.max(chanceA, chanceB);
     cave.tiles.sort(function (a, b) {
-        return level[b.x][b.y].light - level[a.x][a.y].light;
-    });
-    for (var i = 0; i < cave.tiles.length; i++) {
-        var tile = cave.tiles[i];
-        var x = tile.x;
-        var y = tile.y;
+        return level[b.x][b.y].location.light - level[a.x][a.y].location.light;
+    }).forEach(function (_ref15, i) {
+        var x = _ref15.x;
+        var y = _ref15.y;
 
-        var wallCount = countNeighbor(function (tile) {
-            return tile.type === 'wall';
-        }, x, y);
-        if (wallCount === 0) {
-            center = tile;
-            break;
+        var location = level[x][y].location;
+        if (i < cave.tiles.length * tallGrassChance) {
+            level[x][y] = createTile("tallGrass");
+        } else if (i < cave.tiles.length * grassChance) {
+            level[x][y] = createTile("grass");
         }
-    }
-    var cx = center.x;
-    var cy = center.y;
-    level[cx][cy] = createTile('deepWater');
+        level[x][y].location = location;
+        if (i === 0) {
+            var snake = createActor("snake");
+            snake.x = x;
+            snake.y = y;
+            level[x][y].actor = snake;
+            game.schedule.add(snake);
+        }
+    });
+};
 
-    var indeces = randRange(cave.tiles.length);
-    for (var k = 0; k < Math.pow(cave.tiles.length, 1 / 3); k++) {
-        for (var j = 0; j < cave.tiles.length; j++) {
-            var _i = indeces[j];
-            var _tile = cave.tiles[_i];
-            var x = _tile.x;
-            var y = _tile.y;
+var ratCaveSpawner = function ratCaveSpawner(cave) {
+    return {
+        delay: 1200,
+        act: function act() {
+            var ratCount = 0;
+            cave.tiles.forEach(function (tile) {
+                if (tile.actor && tile.actor.name === 'rat') {
+                    ratCount++;
+                }
+            });
+            if (ratCount < 2) {
+                cave.tiles.forEach(function (tile) {
+                    if (!tile.visible && Math.random() < 1 / 24) {
+                        var rat = Math.random() > 0.001 ? createActor('rat') : createActor('albinoRat');
+                        rat.x = tile.x;
+                        rat.y = tile.y;
+                        tile.actor = rat;
+                        game.schedule.add(rat);
+                    }
+                });
+            }
+            game.schedule.add(this, this.delay);
+            return game.schedule.advance().act();
+        }
+    };
+};
 
+var ratCave = function ratCave(cave) {
+    var pillarCount = 0;
+    var pillarMax = Math.ceil(cave.tiles.length / 12);
+    cave.tiles.sort(function (b, a) {
+        return level[b.x][b.y].location.light - level[a.x][a.y].location.light;
+    }).forEach(function (_ref16, i) {
+        var x = _ref16.x;
+        var y = _ref16.y;
 
-            var _wallCount = countNeighbor(function (tile) {
-                return tile.type === 'wall';
-            }, x, y);
-            var deepWaterCount = countNeighbor(function (tile) {
-                return tile.type === 'deepWater';
-            }, x, y);
-            var waterCount = countNeighbor(function (tile) {
-                return tile.type === 'water';
-            }, x, y);
-            var waterScore = waterCount + deepWaterCount * 2;
-            if (waterScore >= 6 && _wallCount === 0) {
-                level[x][y] = createTile('deepWater');
-            } else if (waterScore >= 2) {
-                level[x][y] = createTile('water');
+        if (pillarCount < pillarMax) {
+            if (countNeighbor(function (node) {
+                return node.type === 'floor';
+            }, x, y) === 6) {
+                var location = level[x][y].location;
+                var rand = Math.random();
+                if (rand < 0.02) {
+                    level[x][y] = createTile('brokenPillar');
+                } else if (rand < 0.2) {
+                    level[x][y] = createTile('crackedPillar');
+                } else {
+                    level[x][y] = createTile('pillar');
+                }
+                level[x][y].location = location;
+                pillarCount++;
+            }
+        }
+    });
+    var spawner = ratCaveSpawner(cave);
+    game.schedule.add(spawner, Math.random() * spawner.delay);
+};
+
+var startCave = function startCave(cave) {
+    var _cave$tiles$Math$floo = cave.tiles[Math.floor(cave.tiles.length * Math.random())];
+    var x = _cave$tiles$Math$floo.x;
+    var y = _cave$tiles$Math$floo.y;
+
+    game.player.x = x;
+    game.player.y = y;
+    level[x][y].actor = game.player;
+};
+
+var decorateCaves = function decorateCaves(caves) {
+    var indeces = randRange(caves.length);
+    caves.sort(function (a, b) {
+        return a.tiles.length - b.tiles.length;
+    });
+    for (var j = 0; j < caves.length; j++) {
+        var i = indeces[j];
+        var cave = caves[i];
+        if (i === 0) {
+            startCave(cave);
+        } else if (cave.tiles.length > 7) {
+            if (Math.random() < 0.5) {
+                grassCave(cave);
+            } else {
+                ratCave(cave);
             }
         }
     }
 };
 
-var decorateCaves = function decorateCaves(caves) {
-    var indeces = randRange(caves.length);
-    for (var j = 0; j < caves.length; j++) {
-        var i = indeces[j];
-        var cave = caves[i];
-        //if (Math.round(Math.random())) {
-        //    grassCave(cave);
-        //} else {
-        lakeCave(cave);
-        //}
-        if (j === 0) {
-            var _cave$tiles$Math$floo = cave.tiles[Math.floor(cave.tiles.length * Math.random())];
-            var x = _cave$tiles$Math$floo.x;
-            var y = _cave$tiles$Math$floo.y;
-
-            game.player.x = x;
-            game.player.y = y;
-            level[x][y].actor = game.player;
-        }
-    }
-};
-
-var createLevel = function createLevel(_ref16) {
-    var width = _ref16.width;
-    var height = _ref16.height;
-    var _ref16$prng = _ref16.prng;
-    var prng = _ref16$prng === undefined ? Math.random : _ref16$prng;
+var createLevel = function createLevel(_ref17) {
+    var width = _ref17.width;
+    var height = _ref17.height;
+    var _ref17$prng = _ref17.prng;
+    var prng = _ref17$prng === undefined ? Math.random : _ref17$prng;
 
     // create a 2d array to represent the level
     level = create2dArray(width, height, "wall");
@@ -1472,6 +1760,7 @@ var keyModes = {
 
         if (code === 'KeyF') {
             modes.push('firing');
+            game.display.lineToMouse(game.display.mousex, game.display.mousey);
         }
     },
     firing: function firing(game, code) {
@@ -1510,9 +1799,44 @@ var mousemoveModes = {
     }
 };
 
+var mousedownModes = {
+    playing: function playing(game, x, y) {
+        var directions = [];
+        var lastx = game.player.x;
+        var lasty = game.player.y;
+        line(game.player.x, game.player.y, x, y, function (_ref) {
+            var x = _ref.x;
+            var y = _ref.y;
+
+            directions.push({
+                dx: x - lastx,
+                dy: y - lasty
+            });
+            lastx = x;
+            lasty = y;
+        }, 1);
+        game.level[x][y].skunkGas = game.level[x][y].skunkGas || 0;
+        for (var i = 0; i < 200; i++) {
+            var gas = createActor('skunkGas');
+            gas.age = 0;
+            gas.x = game.player.x;
+            gas.y = game.player.y;
+            gas.directions = directions;
+            game.level[gas.x][gas.y].skunkGas++;
+            game.schedule.add(gas, 100 - i);
+        }
+    },
+    firing: function firing(game, x, y) {}
+};
+
 var tileHover = function tileHover(game, x, y) {
     var mode = modes[modes.length - 1];
     mousemoveModes[mode](game, x, y);
+};
+
+var tileClick = function tileClick(game, x, y) {
+    var mode = modes[modes.length - 1];
+    mousedownModes[mode](game, x, y);
 };
 
 var game$2 = void 0;
@@ -1535,6 +1859,7 @@ var startGame = function startGame(_ref) {
     // add listeners
     window.addEventListener("keydown", keyDown.bind(null, game$2));
     game$2.display.setMouseListener(tileHover.bind(null, game$2));
+    game$2.display.tileClick = tileClick.bind(null, game$2);
 
     game$2.player.see();
     game$2.schedule.advance().act();
@@ -1556,8 +1881,8 @@ var createGame = (function (_ref2) {
         height: height
     };
 
-    display.setDimensions(width, height, 8, 8, 2);
-    display.load("tileset.png", startGame.bind(null, { seed: seed, width: width, height: height }));
+    display.setDimensions(width, height, 18, 16, 1);
+    display.load("tileset2.png", startGame.bind(null, { seed: seed, width: width, height: height }));
 })
 
 var prototype = {
@@ -1571,19 +1896,19 @@ var prototype = {
 		this.xunit = xunit;
 		this.yunit = yunit;
 		this.scale = scale;
-		document.body.style.fontSize = 8 * scale + "px";
+		//document.body.style.fontSize = 16 * scale + "px";
 		this.canvas.width = (width - height / 2 + 1) * xunit;
 		this.canvas.height = height * yunit;
-		this.canvas.style.width = width - height / 2 + 1 + "em";
+		this.canvas.style.width = (width - height / 2 + 1) * xunit * scale + "px";
 		this.bgcanvas.width = (width - height / 2 + 1) * xunit;
 		this.bgcanvas.height = height * yunit;
-		this.bgcanvas.style.width = width - height / 2 + 1 + "em";
+		this.bgcanvas.style.width = (width - height / 2 + 1) * xunit * scale + "px";
 		this.root.style.width = this.canvas.clientWidth + "px";
 		this.fgcanvas.width = (width - height / 2 + 1) * xunit;
 		this.fgcanvas.height = height * yunit;
-		this.fgcanvas.style.width = width - height / 2 + 1 + "em";
-		this.root.style.width = this.canvas.clientWidth + "px";
-		this.root.style.height = this.canvas.clientHeight + this.sidebar.clientHeight + "px";
+		this.fgcanvas.style.width = (width - height / 2 + 1) * xunit * scale + "px";
+		this.root.style.width = this.canvas.clientWidth + 208 + "px";
+		this.root.style.height = this.canvas.clientHeight /*+ this.sidebar.clientHeight*/ + "px";
 	},
 
 	// load the spritesheet then call callback
@@ -1607,20 +1932,35 @@ var prototype = {
 		for (var y = 0; y < this.height; y++) {
 			for (var x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 				var tile = level[x][y];
-				if ( /*tile.light || */tile.visible) {
+				if ( /*tile.location.light || */tile.visible) {
 					var realx = (x - (this.height - y - 1) / 2) * xu;
 					var realy = y * yu;
-					tile.drawn = false;
-					if (tile.fastGas) {
-						this.ctx.fillStyle = 'rgba(255, 255, 255, ' + (1 - Math.pow(2, -tile.fastGas / 10)) + ')';
-					} else {
-						this.ctx.fillStyle = '#000';
+					if (tile.drawn) {
+						this.bgctx.drawImage(tile.shadowCanvas, 0, 0, xu, yu + 8, realx, realy - 8, xu, yu + 8);
 					}
-					this.ctx.fillRect(realx, realy, xu, yu);
+					tile.drawn = false;
+					//this.ctx.fillStyle = '#000';
+					//this.ctx.fillRect(realx, realy, xu, yu);
+					if (tile.fastGas) {
+						var gas = this.cacheTile({
+							spritex: 4,
+							spritey: 0,
+							color: 'rgba(255, 255, 255, ' + (1 - Math.pow(2, -tile.fastGas / 10)) + ')'
+						});
+						this.ctx.drawImage(gas.canvas, 0, 0, xu, yu + 8, realx, realy - 8, xu, yu + 8);
+					}
+					if (tile.skunkGas) {
+						var _gas = this.cacheTile({
+							spritex: 4,
+							spritey: 0,
+							color: 'rgba(255, 255, 255, ' + (1 - Math.pow(2, -tile.skunkGas / 10)) + ')'
+						});
+						this.ctx.drawImage(_gas.canvas, 0, 0, xu, yu + 8, realx, realy - 8, xu, yu + 8);
+					}
 					if (tile.actor) {
-						this.ctx.drawImage(tile.actor.canvas, 0, 0, xu, yu, realx, realy, xu, yu);
+						this.ctx.drawImage(tile.actor.canvas, 0, 0, xu, yu + 8, realx, realy - 8, xu, yu + 8);
 					} else {
-						this.ctx.drawImage(tile.canvas, 0, 0, xu, yu, realx, realy, xu, yu);
+						this.ctx.drawImage(tile.canvas, 0, 0, xu, yu + 8, realx, realy - 8, xu, yu + 8);
 					}
 				}
 			}
@@ -1632,19 +1972,19 @@ var prototype = {
 		for (var y = 0; y < this.height; y++) {
 			for (var x = Math.floor((this.height - y) / 2); x < this.width - Math.floor(y / 2); x++) {
 				var tile = level[x][y];
-				if (!tile.visible && tile.seen && !tile.drawn) {
+				if ( /*!tile.visible && tile.seen && !tile.drawn*/tile.location.light) {
 					var realx = (x - (this.height - y - 1) / 2) * xu;
 					var realy = y * yu;
 					this.bgctx.clearRect(realx, realy, xu, yu);
-					this.bgctx.drawImage(tile.canvas, 0, 0, xu, yu, realx, realy, xu, yu);
+					this.bgctx.drawImage(tile.canvas, 0, 0, xu, yu + 8, realx, realy - 8, xu, yu + 8);
 					tile.drawn = true;
 				}
 			}
 		}
 	},
 	cacheTile: function cacheTile(tile) {
-		var xu = this.xunit;
-		var yu = this.yunit;
+		var xu = 18;
+		var yu = 24;
 		var canvas = document.createElement("canvas");
 		canvas.width = xu;
 		canvas.height = yu;
@@ -1654,6 +1994,17 @@ var prototype = {
 		ctx.globalCompositeOperation = "source-in";
 		ctx.fillRect(0, 0, xu, yu);
 		tile.canvas = canvas;
+
+		var shadowCanvas = document.createElement('canvas');
+		shadowCanvas.width = xu;
+		shadowCanvas.height = yu;
+		var shadowCtx = shadowCanvas.getContext('2d');
+		shadowCtx.drawImage(this.tileset, tile.spritex * xu, tile.spritey * yu, xu, yu, 0, 0, xu, yu);
+		shadowCtx.fillStyle = '#000';
+		shadowCtx.globalCompositeOperation = 'source-in';
+		shadowCtx.fillRect(0, 0, xu, yu);
+		tile.shadowCanvas = shadowCanvas;
+
 		return tile;
 	},
 	cacheLevel: function cacheLevel(level) {
@@ -1666,6 +2017,9 @@ var prototype = {
 	},
 	setMouseListener: function setMouseListener(listener) {
 		this.tileHover = listener;
+	},
+	setMousedownListener: function setMousedownListener(listener) {
+		this.tileClick = listener;
 	},
 
 	mousex: -1,
@@ -1684,33 +2038,42 @@ var prototype = {
 			this.mousey = y;
 			this.tileHover(x, y);
 		}
-		var tile = this.cacheTile({
-			spritex: 9,
-			spritey: 4,
-			color: game.level[x][y].color
-		});
-		var realx = (x - (this.height - y - 1) / 2) * xu;
-		var realy = y * yu;
-		//this.ctx.drawImage(tile.canvas, 0, 0, 8, 8, realx, realy, 8, 8);
+	},
+	mousedown: function mousedown(e) {
+		this.tileClick(this.mousex, this.mousey);
 	},
 	clearFg: function clearFg() {
 		this.fgctx.clearRect(0, 0, this.width * this.xunit, this.height * this.yunit);
 	},
 	lineToMouse: function lineToMouse(x, y) {
-		var realx = (x - (this.height - y - 1) / 2) * this.xunit;
-		var realy = y * this.yunit;
-		var tile = this.cacheTile({
-			spritex: 9,
-			spritey: 4,
-			color: game.level[x][y].color
-		});
+		var _this = this;
+
 		this.clearFg();
-		this.fgctx.drawImage(tile.canvas, 0, 0, 8, 8, realx, realy, 8, 8);
+
+		var tile = this.cacheTile({
+			spritex: 4,
+			spritey: 0,
+			color: 'rgba(0, 255, 255, 0.2)'
+		});
+
+		var callback = function callback(_ref) {
+			var x = _ref.x;
+			var y = _ref.y;
+
+			if (!game.level[x][y].passable || !game.level[x][y].seen) {
+				return true;
+			}
+			var realx = (x - (_this.height - y - 1) / 2) * _this.xunit;
+			var realy = y * _this.yunit;
+			_this.fgctx.drawImage(tile.canvas, 0, 0, _this.xunit, _this.yunit + 8, realx, realy - 8, _this.xunit, _this.yunit + 8);
+		};
+
+		line(game.player.x, game.player.y, x, y, callback, 1);
 	}
 };
 
-var createDisplay = (function (_ref) {
-	var root = _ref.root;
+var createDisplay = (function (_ref2) {
+	var root = _ref2.root;
 
 	var display = Object.create(prototype);
 	display.root = root;
@@ -1742,6 +2105,7 @@ var createDisplay = (function (_ref) {
 	display.bgctx = display.bgcanvas.getContext("2d");
 
 	display.fgcanvas.addEventListener("mousemove", display.mousemove.bind(display), false);
+	display.fgcanvas.addEventListener("mousedown", display.mousedown.bind(display), false);
 
 	return display;
 })

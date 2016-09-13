@@ -1,4 +1,5 @@
 import createActor from "./actor";
+import {line} from "./fov";
 
 const keyCode2code = {
     '27': 'Escape',
@@ -70,6 +71,7 @@ const keyModes = {
 
         if (code === 'KeyF') {
             modes.push('firing');
+            game.display.lineToMouse(game.display.mousex, game.display.mousey);
         }
     },
     firing: (game, code) => {
@@ -108,9 +110,41 @@ const mousemoveModes = {
     },
 };
 
+const mousedownModes = {
+    playing: (game, x, y) => {
+        const directions = [];
+        let lastx = game.player.x;
+        let lasty = game.player.y;
+        line(game.player.x, game.player.y, x, y, ({x, y}) => {
+            directions.push({
+                dx: x - lastx,
+                dy: y - lasty,
+            });
+            lastx = x;
+            lasty = y;
+        }, 1);
+        game.level[x][y].skunkGas = game.level[x][y].skunkGas || 0;
+        for (let i = 0; i < 200; i++) {
+            const gas = createActor('skunkGas');
+            gas.age = 0;
+            gas.x = game.player.x;
+            gas.y = game.player.y;
+            gas.directions = directions;
+            game.level[gas.x][gas.y].skunkGas++;
+            game.schedule.add(gas, 100 - i);
+        }
+    },
+    firing: (game, x, y) => {},
+}
+
 const tileHover = (game, x, y) => {
     const mode = modes[modes.length - 1];
     mousemoveModes[mode](game, x, y);
 };
 
-export {keyDown, tileHover};
+const tileClick = (game, x, y) => {
+    const mode = modes[modes.length - 1];
+    mousedownModes[mode](game, x, y);
+};
+
+export {keyDown, tileHover, tileClick};

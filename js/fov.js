@@ -30,25 +30,6 @@ const line = (x1, y1, x2, y2, callback, skip = 0) => {
     }
 };
 
-const newfov = (ox, oy, width, height, transparent, reveal) => {
-    reveal(ox, oy);
-
-    const callback = ({x, y}) => {
-        reveal(x, y);
-        return !transparent(x, y);
-    };
-
-    for (let x = Math.floor(height / 2); x < width; x++) {
-        line(ox, oy, x, 0, callback, 1);
-        line(ox, oy, x - Math.floor(height / 2), height - 1, callback, 1);
-    }
-
-    for (let y = 0; y < height; y++) {
-        line(ox, oy, Math.floor((height - y) / 2), y, callback, 1);
-        line(ox, oy, width - Math.floor(y / 2), y, callback, 1);
-    }
-};
-
 const xDir = [0, 1, 1, 0,-1,-1];
 const yDir = [1, 0,-1,-1, 0, 1];
 
@@ -77,7 +58,7 @@ const normal = [
 // round a number, but round down if it ends in .5
 const roundTieDown = n => Math.ceil(n - 0.5);
 
-const fov = (ox, oy, transparent, reveal) => {
+const fov = (ox, oy, transparent, reveal, range = 9e9) => {
     reveal(ox, oy);
 
     const revealWall = (x, y) => {
@@ -104,6 +85,7 @@ const fov = (ox, oy, transparent, reveal) => {
     // radius - radius of arc
     // start & end - angles for start and end of arc
     const scan = (radius, start, end) => {
+        if (radius > range) { return; }
         let someRevealed = false;
         let [x, y, arc] = polar2rect(radius, start);
         let current = start;
@@ -113,12 +95,14 @@ const fov = (ox, oy, transparent, reveal) => {
                 if (current >= start && current <= end) {
                     reveal(x, y);
                     someRevealed = true;
-                    if (current >= 0 && current <= 2) { revealWall(x + 1, y - 1); }
-                    if (current >= 1 && current <= 3) { revealWall(x    , y - 1); }
-                    if (current >= 2 && current <= 4) { revealWall(x - 1, y    ); }
-                    if (current >= 3 && current <= 5) { revealWall(x - 1, y + 1); }
-                    if (current >= 4 && current <= 6) { revealWall(x    , y + 1); }
-                    if (current <= 1 || current >= 5) { revealWall(x + 1, y    ); }
+                    if (radius < range) {
+                        if (current >= 0 && current <= 2) { revealWall(x + 1, y - 1); }
+                        if (current >= 1 && current <= 3) { revealWall(x    , y - 1); }
+                        if (current >= 2 && current <= 4) { revealWall(x - 1, y    ); }
+                        if (current >= 3 && current <= 5) { revealWall(x - 1, y + 1); }
+                        if (current >= 4 && current <= 6) { revealWall(x    , y + 1); }
+                        if (current <= 1 || current >= 5) { revealWall(x + 1, y    ); }
+                    }
                 }
             } else {
                 current = (arc + 0.5) / radius;

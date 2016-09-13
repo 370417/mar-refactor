@@ -230,13 +230,13 @@ const findCave = () => {
 
     caveMap.forEach(node => {
         if (node.cost > 1) {
-            level[node.x][node.y].cave = true;
+            level[node.x][node.y].location.cave = true;
         }
     });
 
     // Find floor tiles one tile away from a cave
     forEachTile(({x, y, tile}) => {
-        if (tile.passable && !tile.cavev && countNeighbor(node => node.cave, x, y)) {
+        if (tile.passable && !tile.location.cave && countNeighbor(node => node.location.cave, x, y)) {
             tile.potentialCave = true;
         }
     });
@@ -246,23 +246,23 @@ const findCave = () => {
     // Mark those cave exits as targets for dijkstra
     forEachTile(({tile, x, y}) => {
         if (tile.potentialCave) {
-            tile.cave = true;
+            tile.location.cave = true;
         }
     });
 
-    const isCave = (x, y) => level[x][y].cave === true;
+    const isCave = (x, y) => level[x][y].location.cave === true;
 
     // floodfill to group caves
     const caves = [];
     forEachTile(({x, y}) => {
-        if (level[x][y].cave === true) {
+        if (level[x][y].location.cave === true) {
             const cave = {
                 size: 0,
                 tiles: [],
             };
             caves.push(cave);
             floodFill(x, y, isCave, (x, y) => {
-                level[x][y].cave = cave;
+                level[x][y].location.cave = cave;
                 cave.size++;
                 cave.tiles.push({x, y});
             });
@@ -274,12 +274,24 @@ const findCave = () => {
 
 const findExits = () => {
     forEachTile(({tile, x, y}) => {
-        tile.light = 0;
-        if (tile.passable && !tile.cave && countNeighbor(node => node.cave, x, y)) {
-            if (countNeighbor(node => node.passable && !node.cave, x, y)) {
-                tile.exit = true;
-            } else {
-                tile.cave = true;
+        tile.location.light = 0;
+        if (tile.passable && !tile.location.cave && countNeighbor(node => node.location.cave, x, y)) {
+            let cave;
+            for (let i = 0; i < 6; i++) {
+                const x2 = x + xDir[i];
+                const y2 = y + yDir[i];
+                const neighbor = level[x2][y2];
+                if (neighbor.passable) {
+                    if (neighbor.location.cave) {
+                        cave = neighbor.location.cave;
+                    } else {
+                        tile.location.exit = true;
+                        break;
+                    }
+                }
+            }
+            if (!tile.location.exit) {
+                tile.location.cave = cave;
             }
         }
     });
@@ -287,21 +299,21 @@ const findExits = () => {
 
 const normalizeLight = (maxLight) => {
     forEachTile(({tile}) => {
-        tile.light /= maxLight;
+        tile.location.light /= maxLight;
     });
 };
 
 const lightUp = () => {
     forEachTile(({x, y}) => {
-        level[x][y].light = level[x][y].light || 0;
+        level[x][y].location.light = level[x][y].location.light || 0;
     });
     let maxLight = 0;
     forEachTile(({x, y}) => {
         if (level[x][y].transparent) {
             fov(x, y, (x, y) => level[x][y].transparent, (x, y) => {
-                level[x][y].light++;
-                if (level[x][y].light > maxLight) {
-                    maxLight = level[x][y].light;
+                level[x][y].location.light++;
+                if (level[x][y].location.light > maxLight) {
+                    maxLight = level[x][y].location.light;
                 }
             });
         }
@@ -315,30 +327,82 @@ const grassCave = cave => {
     const tallGrassChance = Math.min(chanceA, chanceB);
     const grassChance = Math.max(chanceA, chanceB);
     cave.tiles.sort((a, b) => {
-        return level[b.x][b.y].light - level[a.x][a.y].light;
+        return level[b.x][b.y].location.light - level[a.x][a.y].location.light;
     }).forEach(({x, y}, i) => {
-        const oldTile = level[x][y];
+        const location = level[x][y].location;
         if (i < cave.tiles.length * tallGrassChance) {
             level[x][y] = createTile("tallGrass");
         } else if (i < cave.tiles.length * grassChance) {
             level[x][y] = createTile("grass");
         }
-        if (level[x][y] !== oldTile) {
-            for (key in oldTile) {
-                if (oldTile.hasOwnProperty(key)) {
-                    level[x][y][key] = oldTile[key];
-                }
-            }
-        }
-        /*if (i === 0) {
+        level[x][y].location = location;
+        if (i === 0) {
             const snake = createActor("snake");
             snake.x = x;
             snake.y = y;
             level[x][y].actor = snake;
             game.schedule.add(snake);
-        }*/
+        }
     });
 };
+
+const ratCaveSpawner = cave => ({
+    delay: 1200,
+    act() {
+        let ratCount = 0;
+        cave.tiles.forEach(tile => {
+            if (tile.actor && tile.actor.name === 'rat') {
+                ratCount++;
+            }
+        });
+        if (ratCount < 2) {
+            cave.tiles.forEach(tile => {
+                if (!tile.visible && Math.random() < 1/24) {
+                    const rat = Math.random() > 0.001 ? createActor('rat') : createActor('albinoRat');
+                    rat.x = tile.x;
+                    rat.y = tile.y;
+                    tile.actor = rat;
+                    game.schedule.add(rat);
+                }
+            });
+        }
+        game.schedule.add(this, this.delay);
+        return game.schedule.advance().act();
+    },
+});
+
+const ratCave = cave => {
+    let pillarCount = 0;
+    const pillarMax = Math.ceil(cave.tiles.length / 12);
+    cave.tiles.sort((b, a) => {
+        return level[b.x][b.y].location.light - level[a.x][a.y].location.light;
+    }).forEach(({x, y}, i) => {
+        if (pillarCount < pillarMax) {
+            if (countNeighbor(node => node.type === 'floor', x, y) === 6) {
+                const location = level[x][y].location;
+                const rand = Math.random();
+                if (rand < 0.02) {
+                    level[x][y] = createTile('brokenPillar');
+                } else if (rand < 0.2) {
+                    level[x][y] = createTile('crackedPillar');
+                } else {
+                    level[x][y] = createTile('pillar');
+                }
+                level[x][y].location = location;
+                pillarCount++;
+            }
+        }
+    });
+    const spawner = ratCaveSpawner(cave);
+    game.schedule.add(spawner, Math.random() * spawner.delay);
+};
+
+const startCave = cave => {
+    let {x, y} = cave.tiles[Math.floor(cave.tiles.length * Math.random())];
+    game.player.x = x;
+    game.player.y = y;
+    level[x][y].actor = game.player;
+}
 
 const lakeCave = cave => {
     let center;
@@ -356,13 +420,16 @@ const lakeCave = cave => {
     }
     const cx = center.x;
     const cy = center.y;
+    const location = level[cx][cy].location;
     level[cx][cy] = createTile('deepWater');
+    level[cx][cy].location = location;
 
     const indeces = randRange(cave.tiles.length);
     for (let k = 0; k < Math.pow(cave.tiles.length, 1/3); k++) {
         for (let j = 0; j < cave.tiles.length; j++) {
             const i = indeces[j];
             const tile = cave.tiles[i];
+            const location = tile.location;
             const {x, y} = tile;
 
             const wallCount = countNeighbor(tile => tile.type === 'wall', x, y);
@@ -374,25 +441,25 @@ const lakeCave = cave => {
             } else if (waterScore >= 2) {
                 level[x][y] = createTile('water');
             }
+            level[x][y].location = location;
         }
     }
 };
 
 const decorateCaves = caves => {
     const indeces = randRange(caves.length);
+    caves.sort((a, b) => a.tiles.length - b.tiles.length);
     for (let j = 0; j < caves.length; j++) {
         const i = indeces[j];
         const cave = caves[i];
-        //if (Math.round(Math.random())) {
-        //    grassCave(cave);
-        //} else {
-            lakeCave(cave);
-        //}
-        if (j === 0) {
-            let {x, y} = cave.tiles[Math.floor(cave.tiles.length * Math.random())];
-            game.player.x = x;
-            game.player.y = y;
-            level[x][y].actor = game.player;
+        if (i === 0) {
+            startCave(cave);
+        } else if (cave.tiles.length > 7) {
+            if (Math.random() < 0.5) {
+                grassCave(cave);
+            } else {
+                ratCave(cave);
+            }
         }
     }
 };
