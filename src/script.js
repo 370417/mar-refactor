@@ -63,10 +63,12 @@ const directions = {DIR1, DIR3, DIR5, DIR7, DIR9, DIR11};
 
 const WALL = 0;
 const FLOOR = 1;
+const GRASS = 2;
 
 const TILES = {
     WALL,
     FLOOR,
+    GRASS,
 };
 
 // ========== //
@@ -87,10 +89,6 @@ const randElement = (array, prng) => {
     const keys = Object.keys(array);
     return array[keys[randInt(0, array.length - 1, prng)]];
 };
-
-// ====== //
-// #Level //
-// ====== //
 
 const forEachTileOfLevel = (width, height, fun) => {
     for (let y = 0; y < height; y++) {
@@ -165,6 +163,103 @@ const floodFill = (x, y, passable, callback) => {
     }
 };
 
+// round a number, but round down in case of x.5
+const roundTieDown = n => Math.ceil(n - 0.5);
+
+// ==== //
+// #FOV //
+// ==== //
+
+// displacement vector for moving tangent to a circle counterclockwise in a certain sector
+const tangent = [
+    { x: 0, y:-1 },//  \
+    { x:-1, y: 0 },//  -
+    { x:-1, y: 1 },//  /
+    { x: 0, y: 1 },//  \
+    { x: 1, y: 0 },//  -
+    { x: 1, y:-1 },//  /
+    { x: 0, y:-1 },//  \
+];
+
+// displacement vector for moving normal to a circle outward in a certain sector
+const normal = [
+    { x: 1, y: 0 },// -
+    { x: 1, y:-1 },// /
+    { x: 0, y:-1 },// \
+    { x:-1, y: 0 },// -
+    { x:-1, y: 1 },// /
+    { x: 0, y: 1 },// \
+    { x: 1, y: 0 },// -
+];
+
+const fov = (ox, oy, transparent, reveal, range = 9e9) => {
+    reveal(ox, oy);
+
+    const revealWall = (x, y) => {
+        if (!transparent(x, y)) {
+            reveal(x, y);
+        }
+    };
+
+    for (const key in directions) {
+        const {dx, dy} = directions[key];
+        revealWall(ox + dx, oy + dy);
+    }
+
+    const polar2rect = (radius, angle) => {
+        const sector = Math.floor(angle);
+        const arc = roundTieDown((angle - sector) * (radius - 0.5));
+        return {
+            x: ox + radius * normal[sector].x + arc * tangent[sector].x,
+            y: oy + radius * normal[sector].y + arc * tangent[sector].y,
+            arc: radius * sector + arc,
+        };
+    };
+
+    const scan = (radius, start, end) => {
+        if (radius > range) { return; }
+        let someRevealed = false;
+        let {x, y, arc} = polar2rect(radius, start);
+        let current = start;
+        while (current < end) {
+            if (transparent(x, y)) {
+                current = arc / radius;
+                if (current >= start && current <= end) {
+                    reveal(x, y);
+                    someRevealed = true;
+                    if (radius < range) {
+                        if (current >= 0 && current <= 2) { revealWall(x + 1, y - 1); }
+                        if (current >= 1 && current <= 3) { revealWall(x    , y - 1); }
+                        if (current >= 2 && current <= 4) { revealWall(x - 1, y    ); }
+                        if (current >= 3 && current <= 5) { revealWall(x - 1, y + 1); }
+                        if (current >= 4 && current <= 6) { revealWall(x    , y + 1); }
+                        if (current <= 1 || current >= 5) { revealWall(x + 1, y    ); }
+                    }
+                }
+            } else {
+                current = (arc + 0.5) / radius;
+                if (someRevealed) {
+                    scan(radius + 1, start, (arc - 0.5) / radius);
+                }
+                start = current;
+            }
+            // increment everything
+            const displacement = tangent[Math.floor(arc / radius)];
+            x += displacement.x;
+            y += displacement.y;
+            arc++;
+        }
+        if (someRevealed) {
+            scan(radius + 1, start, end);
+        }
+    };
+    scan(1, 0, 6);
+};
+
+// ====== //
+// #Level //
+// ====== //
+
 const createLevel = ({
     width,
     height,
@@ -185,6 +280,22 @@ const createLevel = ({
 
     const forEachTile = forEachTileOfLevel.bind(null, width, height);
     const forEachInnerTile = forEachInnerTileOfLevel.bind(null, width, height);
+
+    const findCavesTunnels = () => {
+        const isFloor = (x, y) => level[x][y].type === FLOOR;
+        forEachInnerTile((x, y) => {
+            const tile = level[x][y];
+            tile.cave = false;
+            tile.tunnel = false;
+            if (isFloor(x, y)) {
+                if (countGroups(x, y, isFloor) === 1) {
+                    tile.cave = true;
+                } else {
+                    tile.tunnel = true;
+                }
+            }
+        });
+    };
 
     // floor at starting point
     level[startx][starty].type = FLOOR;
@@ -230,22 +341,163 @@ const createLevel = ({
     });
 
     // find the size of the open space around the starting point
-    let mainCaveSize = 0;
-    const passable = (x, y) => level[x][y].type === FLOOR && !level[x][y].flooded;
-    const callback = (x, y) => {
-        level[x][y].flooded = true;
-        mainCaveSize++;
-    };
-    floodFill(startx, starty, passable, callback);
+    {
+        let mainCaveSize = 0;
+        const passable = (x, y) => level[x][y].type === FLOOR && !level[x][y].flooded;
+        const callback = (x, y) => {
+            level[x][y].flooded = true;
+            mainCaveSize++;
+        };
+        floodFill(startx, starty, passable, callback);
+    }
 
     // fill in other discontinuous caves
-    forEachTile((x, y) => {
+    forEachInnerTile((x, y) => {
         if (level[x][y].type === FLOOR && !level[x][y].flooded) {
             level[x][y] = { type: WALL };
         }
     });
 
-    alert(mainCaveSize);
+    // clear flooded flag
+    forEachTile((x, y) => {
+        level[x][y].flooded = false;
+    });
+
+    findCavesTunnels();
+
+    // fill in dead ends
+    const isNotCave = (x, y) => !level[x][y].cave;
+    const fillDead = (x, y) => {
+        if (!level[x][y].cave || !surrounded(x, y, isNotCave)) {
+            return;
+        }
+
+        level[x][y] = { type: WALL };
+
+        for (const key in directions) {
+            const {dx, dy} = directions[key];
+            const tile = level[x+dx][y+dy];
+            if (tile.type === FLOOR && tile.tunnel) {
+                if (countGroups(x + dx, y + dy, (x, y) => level[x][y].type === FLOOR) === 1) {
+                    tile.tunnel = false;
+                    tile.cave = true;
+                }
+            }
+        }
+
+        for (const key in directions) {
+            const {dx, dy} = directions[key];
+            fillDead(x + dx, y + dy);
+        }
+    };
+    forEachInnerTile((x, y) => {
+        fillDead(x, y);
+    });
+
+    // find groups of wall totally surrounded by tunnel and turn them to floor
+    forEachInnerTile((x, y) => {
+        if (level[x][y].type === FLOOR || level[x][y].flooded) {
+            return;
+        }
+        let surroundedByTunnel = true;
+        const passable = (x, y) => {
+            if (!inInnerBounds(width, height, x, y) || level[x][y].cave) {
+                surroundedByTunnel = false;
+            }
+            return inBounds(width, height, x, y) && level[x][y].type === WALL && !level[x][y].flooded;
+        }
+        const callback = (x, y) => {
+            level[x][y].flooded = true;
+        }
+        floodFill(x, y, passable, callback);
+
+        if (surroundedByTunnel) {
+            floodFill(x, y, (x, y) => level[x][y].type === WALL, (x, y) => level[x][y].type = FLOOR);
+        }
+    });
+
+    // recalculate cave/tunnel status and fill any new dead ends
+    findCavesTunnels();
+    forEachInnerTile((x, y) => {
+        fillDead(x, y);
+    });
+
+    // floodfill caves
+    const findCaves = () => {
+        forEachInnerTile((x, y) => {
+            if (level[x][y].cave === true) {
+                const cave = {
+                    tiles: [],
+                };
+                const passable = (x, y) => level[x][y].cave === true;
+                const callback = (x, y) => {
+                    cave.tiles.push({x, y});
+                    level[x][y].cave = cave;
+                };
+                floodFill(x, y, passable, callback);
+            }
+        });
+    };
+
+    // remove 2-tile caves
+    forEachInnerTile((x, y) => {
+        const tile = level[x][y];
+        if (tile.cave && tile.cave !== true && tile.cave.tiles.length === 2) {
+            const keep = Math.round(prng());
+            const fill = 1 - keep;
+            const keepCoords = tile.cave.tiles[keep];
+            const fillCoords = tile.cave.tiles[fill];
+            tile.cave.tiles.splice(fill, 1);
+
+            level[fillCoords.x][fillCoords.y] = { type: WALL };
+            fillDead(keepCoords.x, keepCoords.y);
+        }
+    });
+
+    // recalc caves/tunnels
+    findCavesTunnels();
+    findCaves();
+
+    // remake level if too small
+    {
+        let size = 0;
+        const passable = (x, y) => level[x][y].type === FLOOR && !level[x][y].flooded;
+        const callback = (x, y) => {
+            size++;
+            level[x][y].flooded = true;
+        }
+        floodFill(startx, starty, passable, callback);
+        if (size < 350) {
+            return createLevel({
+                width,
+                height,
+                prng,
+                startx,
+                starty,
+            });
+        }
+    }
+
+    // calculate light values
+    forEachTile((x, y) => {
+        level[x][y].light = 0;
+    });
+    forEachInnerTile((x, y) => {
+        const tile = level[x][y];
+        if (tile.type === FLOOR) {
+            const transparent = (x, y) => level[x][y].type === FLOOR;
+            const reveal = (x, y) => {
+                level[x][y].light++;
+            };
+            fov(x, y, transparent, reveal);
+        }
+    });
+
+    forEachInnerTile((x, y) => {
+        if (level[x][y].cave) {
+            //level[x][y].type = GRASS;
+        }
+    });
 
     return level;
 };
@@ -274,6 +526,7 @@ const createGame = ({
     forEachTile((x, y) => {
         updateTile(x, y, {
             type: level[x][y].type,
+            light: level[x][y].light,
         });
     });
 
@@ -327,12 +580,17 @@ const displayTiles = {
     WALL: {
         spritex: 0,
         spritey: 0,
-        color: '#FFF',
+        color: '#BBB',
     },
     FLOOR: {
         spritex: 1,
         spritey: 0,
         color: '#FFF',
+    },
+    GRASS: {
+        spritex: 2,
+        spritey: 0,
+        color: '#8F8',
     },
 };
 
@@ -365,10 +623,12 @@ const forEachTile = forEachTileOfLevel.bind(null, WIDTH, HEIGHT);
 
 const draw = () => {
     forEachTile((x, y) => {
-        const ctx = ctxs[y];
-        const displayTile = displayTiles[level[x][y].type];
-        const realx = (x - (HEIGHT - y - 1) / 2) * XU;
-        ctx.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
+        if (level[x][y].light) {
+            const ctx = ctxs[y];
+            const displayTile = displayTiles[level[x][y].type];
+            const realx = (x - (HEIGHT - y - 1) / 2) * XU;
+            ctx.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
+        }
     });
 };
 

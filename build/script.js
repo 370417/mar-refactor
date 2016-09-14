@@ -1,5 +1,7 @@
 'use strict';
 
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
+
 // ===== //
 // #PRNG //
 // ===== //
@@ -65,10 +67,12 @@ var directions = { DIR1: DIR1, DIR3: DIR3, DIR5: DIR5, DIR7: DIR7, DIR9: DIR9, D
 
 var WALL = 0;
 var FLOOR = 1;
+var GRASS = 2;
 
 var TILES = {
     WALL: WALL,
-    FLOOR: FLOOR
+    FLOOR: FLOOR,
+    GRASS: GRASS
 };
 
 // ========== //
@@ -89,10 +93,6 @@ var randElement = function randElement(array, prng) {
     var keys = Object.keys(array);
     return array[keys[randInt(0, array.length - 1, prng)]];
 };
-
-// ====== //
-// #Level //
-// ====== //
 
 var forEachTileOfLevel = function forEachTileOfLevel(width, height, fun) {
     for (var y = 0; y < height; y++) {
@@ -167,6 +167,126 @@ var floodFill = function floodFill(x, y, passable, callback) {
     }
 };
 
+// round a number, but round down in case of x.5
+var roundTieDown = function roundTieDown(n) {
+    return Math.ceil(n - 0.5);
+};
+
+// ==== //
+// #FOV //
+// ==== //
+
+// displacement vector for moving tangent to a circle counterclockwise in a certain sector
+var tangent = [{ x: 0, y: -1 }, //  \
+{ x: -1, y: 0 }, //  -
+{ x: -1, y: 1 }, //  /
+{ x: 0, y: 1 }, //  \
+{ x: 1, y: 0 }, //  -
+{ x: 1, y: -1 }, //  /
+{ x: 0, y: -1 }];
+
+// displacement vector for moving normal to a circle outward in a certain sector
+var normal = [{ x: 1, y: 0 }, // -
+{ x: 1, y: -1 }, // /
+{ x: 0, y: -1 }, // \
+{ x: -1, y: 0 }, // -
+{ x: -1, y: 1 }, // /
+{ x: 0, y: 1 }, // \
+{ x: 1, y: 0 }];
+
+var fov = function fov(ox, oy, transparent, reveal) {
+    var range = arguments.length <= 4 || arguments[4] === undefined ? 9e9 : arguments[4];
+
+    reveal(ox, oy);
+
+    var revealWall = function revealWall(x, y) {
+        if (!transparent(x, y)) {
+            reveal(x, y);
+        }
+    };
+
+    for (var key in directions) {
+        var _directions$key3 = directions[key];
+        var dx = _directions$key3.dx;
+        var dy = _directions$key3.dy;
+
+        revealWall(ox + dx, oy + dy);
+    }
+
+    var polar2rect = function polar2rect(radius, angle) {
+        var sector = Math.floor(angle);
+        var arc = roundTieDown((angle - sector) * (radius - 0.5));
+        return {
+            x: ox + radius * normal[sector].x + arc * tangent[sector].x,
+            y: oy + radius * normal[sector].y + arc * tangent[sector].y,
+            arc: radius * sector + arc
+        };
+    };
+
+    var scan = function scan(radius, start, end) {
+        if (radius > range) {
+            return;
+        }
+        var someRevealed = false;
+
+        var _polar2rect = polar2rect(radius, start);
+
+        var x = _polar2rect.x;
+        var y = _polar2rect.y;
+        var arc = _polar2rect.arc;
+
+        var current = start;
+        while (current < end) {
+            if (transparent(x, y)) {
+                current = arc / radius;
+                if (current >= start && current <= end) {
+                    reveal(x, y);
+                    someRevealed = true;
+                    if (radius < range) {
+                        if (current >= 0 && current <= 2) {
+                            revealWall(x + 1, y - 1);
+                        }
+                        if (current >= 1 && current <= 3) {
+                            revealWall(x, y - 1);
+                        }
+                        if (current >= 2 && current <= 4) {
+                            revealWall(x - 1, y);
+                        }
+                        if (current >= 3 && current <= 5) {
+                            revealWall(x - 1, y + 1);
+                        }
+                        if (current >= 4 && current <= 6) {
+                            revealWall(x, y + 1);
+                        }
+                        if (current <= 1 || current >= 5) {
+                            revealWall(x + 1, y);
+                        }
+                    }
+                }
+            } else {
+                current = (arc + 0.5) / radius;
+                if (someRevealed) {
+                    scan(radius + 1, start, (arc - 0.5) / radius);
+                }
+                start = current;
+            }
+            // increment everything
+            var displacement = tangent[Math.floor(arc / radius)];
+            x += displacement.x;
+            y += displacement.y;
+            arc++;
+        }
+        if (someRevealed) {
+            scan(radius + 1, start, end);
+        }
+    };
+    scan(1, 0, 6);
+};
+
+// ====== //
+// #Level //
+// ====== //
+
 var createLevel = function createLevel(_ref) {
     var width = _ref.width;
     var height = _ref.height;
@@ -190,6 +310,24 @@ var createLevel = function createLevel(_ref) {
     var forEachTile = forEachTileOfLevel.bind(null, width, height);
     var forEachInnerTile = forEachInnerTileOfLevel.bind(null, width, height);
 
+    var findCavesTunnels = function findCavesTunnels() {
+        var isFloor = function isFloor(x, y) {
+            return level[x][y].type === FLOOR;
+        };
+        forEachInnerTile(function (x, y) {
+            var tile = level[x][y];
+            tile.cave = false;
+            tile.tunnel = false;
+            if (isFloor(x, y)) {
+                if (countGroups(x, y, isFloor) === 1) {
+                    tile.cave = true;
+                } else {
+                    tile.tunnel = true;
+                }
+            }
+        });
+    };
+
     // floor at starting point
     level[startx][starty].type = FLOOR;
 
@@ -205,11 +343,11 @@ var createLevel = function createLevel(_ref) {
 
     for (var i = 0; i < scrambledTiles.length; i++) {
         var _scrambledTiles$i = scrambledTiles[i];
-        var _x = _scrambledTiles$i.x;
+        var _x2 = _scrambledTiles$i.x;
         var _y = _scrambledTiles$i.y;
 
-        if (surrounded(_x, _y, isWall) || countGroups(_x, _y, isWall) !== 1) {
-            level[_x][_y].type = FLOOR;
+        if (surrounded(_x2, _y, isWall) || countGroups(_x2, _y, isWall) !== 1) {
+            level[_x2][_y].type = FLOOR;
         }
     }
 
@@ -241,24 +379,195 @@ var createLevel = function createLevel(_ref) {
     });
 
     // find the size of the open space around the starting point
-    var mainCaveSize = 0;
-    var passable = function passable(x, y) {
-        return level[x][y].type === FLOOR && !level[x][y].flooded;
-    };
-    var callback = function callback(x, y) {
-        level[x][y].flooded = true;
-        mainCaveSize++;
-    };
-    floodFill(startx, starty, passable, callback);
+    {
+        (function () {
+            var mainCaveSize = 0;
+            var passable = function passable(x, y) {
+                return level[x][y].type === FLOOR && !level[x][y].flooded;
+            };
+            var callback = function callback(x, y) {
+                level[x][y].flooded = true;
+                mainCaveSize++;
+            };
+            floodFill(startx, starty, passable, callback);
+        })();
+    }
 
     // fill in other discontinuous caves
-    forEachTile(function (x, y) {
+    forEachInnerTile(function (x, y) {
         if (level[x][y].type === FLOOR && !level[x][y].flooded) {
             level[x][y] = { type: WALL };
         }
     });
 
-    alert(mainCaveSize);
+    // clear flooded flag
+    forEachTile(function (x, y) {
+        level[x][y].flooded = false;
+    });
+
+    findCavesTunnels();
+
+    // fill in dead ends
+    var isNotCave = function isNotCave(x, y) {
+        return !level[x][y].cave;
+    };
+    var fillDead = function fillDead(x, y) {
+        if (!level[x][y].cave || !surrounded(x, y, isNotCave)) {
+            return;
+        }
+
+        level[x][y] = { type: WALL };
+
+        for (var key in directions) {
+            var _directions$key4 = directions[key];
+            var dx = _directions$key4.dx;
+            var dy = _directions$key4.dy;
+
+            var tile = level[x + dx][y + dy];
+            if (tile.type === FLOOR && tile.tunnel) {
+                if (countGroups(x + dx, y + dy, function (x, y) {
+                    return level[x][y].type === FLOOR;
+                }) === 1) {
+                    tile.tunnel = false;
+                    tile.cave = true;
+                }
+            }
+        }
+
+        for (var _key in directions) {
+            var _directions$_key = directions[_key];
+            var dx = _directions$_key.dx;
+            var dy = _directions$_key.dy;
+
+            fillDead(x + dx, y + dy);
+        }
+    };
+    forEachInnerTile(function (x, y) {
+        fillDead(x, y);
+    });
+
+    // find groups of wall totally surrounded by tunnel and turn them to floor
+    forEachInnerTile(function (x, y) {
+        if (level[x][y].type === FLOOR || level[x][y].flooded) {
+            return;
+        }
+        var surroundedByTunnel = true;
+        var passable = function passable(x, y) {
+            if (!inInnerBounds(width, height, x, y) || level[x][y].cave) {
+                surroundedByTunnel = false;
+            }
+            return inBounds(width, height, x, y) && level[x][y].type === WALL && !level[x][y].flooded;
+        };
+        var callback = function callback(x, y) {
+            level[x][y].flooded = true;
+        };
+        floodFill(x, y, passable, callback);
+
+        if (surroundedByTunnel) {
+            floodFill(x, y, function (x, y) {
+                return level[x][y].type === WALL;
+            }, function (x, y) {
+                return level[x][y].type = FLOOR;
+            });
+        }
+    });
+
+    // recalculate cave/tunnel status and fill any new dead ends
+    findCavesTunnels();
+    forEachInnerTile(function (x, y) {
+        fillDead(x, y);
+    });
+
+    // floodfill caves
+    var findCaves = function findCaves() {
+        forEachInnerTile(function (x, y) {
+            if (level[x][y].cave === true) {
+                (function () {
+                    var cave = {
+                        tiles: []
+                    };
+                    var passable = function passable(x, y) {
+                        return level[x][y].cave === true;
+                    };
+                    var callback = function callback(x, y) {
+                        cave.tiles.push({ x: x, y: y });
+                        level[x][y].cave = cave;
+                    };
+                    floodFill(x, y, passable, callback);
+                })();
+            }
+        });
+    };
+
+    // remove 2-tile caves
+    forEachInnerTile(function (x, y) {
+        var tile = level[x][y];
+        if (tile.cave && tile.cave !== true && tile.cave.tiles.length === 2) {
+            var keep = Math.round(prng());
+            var fill = 1 - keep;
+            var keepCoords = tile.cave.tiles[keep];
+            var fillCoords = tile.cave.tiles[fill];
+            tile.cave.tiles.splice(fill, 1);
+
+            level[fillCoords.x][fillCoords.y] = { type: WALL };
+            fillDead(keepCoords.x, keepCoords.y);
+        }
+    });
+
+    // recalc caves/tunnels
+    findCavesTunnels();
+    findCaves();
+
+    // remake level if too small
+    {
+        var _ret3 = function () {
+            var size = 0;
+            var passable = function passable(x, y) {
+                return level[x][y].type === FLOOR && !level[x][y].flooded;
+            };
+            var callback = function callback(x, y) {
+                size++;
+                level[x][y].flooded = true;
+            };
+            floodFill(startx, starty, passable, callback);
+            if (size < 350) {
+                return {
+                    v: createLevel({
+                        width: width,
+                        height: height,
+                        prng: prng,
+                        startx: startx,
+                        starty: starty
+                    })
+                };
+            }
+        }();
+
+        if ((typeof _ret3 === 'undefined' ? 'undefined' : _typeof(_ret3)) === "object") return _ret3.v;
+    }
+
+    // calculate light values
+    forEachTile(function (x, y) {
+        level[x][y].light = 0;
+    });
+    forEachInnerTile(function (x, y) {
+        var tile = level[x][y];
+        if (tile.type === FLOOR) {
+            var transparent = function transparent(x, y) {
+                return level[x][y].type === FLOOR;
+            };
+            var reveal = function reveal(x, y) {
+                level[x][y].light++;
+            };
+            fov(x, y, transparent, reveal);
+        }
+    });
+
+    forEachInnerTile(function (x, y) {
+        if (level[x][y].cave) {
+            //level[x][y].type = GRASS;
+        }
+    });
 
     return level;
 };
@@ -286,7 +595,8 @@ var createGame = function createGame(_ref2) {
 
     forEachTile(function (x, y) {
         updateTile(x, y, {
-            type: level[x][y].type
+            type: level[x][y].type,
+            light: level[x][y].light
         });
     });
 
@@ -340,12 +650,17 @@ var displayTiles = {
     WALL: {
         spritex: 0,
         spritey: 0,
-        color: '#FFF'
+        color: '#BBB'
     },
     FLOOR: {
         spritex: 1,
         spritey: 0,
         color: '#FFF'
+    },
+    GRASS: {
+        spritex: 2,
+        spritey: 0,
+        color: '#8F8'
     }
 };
 
@@ -378,10 +693,12 @@ var forEachTile = forEachTileOfLevel.bind(null, WIDTH, HEIGHT);
 
 var draw = function draw() {
     forEachTile(function (x, y) {
-        var ctx = ctxs[y];
-        var displayTile = displayTiles[level[x][y].type];
-        var realx = (x - (HEIGHT - y - 1) / 2) * XU;
-        ctx.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
+        if (level[x][y].light) {
+            var _ctx2 = ctxs[y];
+            var displayTile = displayTiles[level[x][y].type];
+            var realx = (x - (HEIGHT - y - 1) / 2) * XU;
+            _ctx2.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
+        }
     });
 };
 
