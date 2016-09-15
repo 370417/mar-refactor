@@ -2,7 +2,13 @@
 // #PRNG //
 // ===== //
 
-const prng = Math.random;
+const mainSeed = Math.random() + '';
+const mainPrng = new Math.seedrandom(mainSeed);
+
+const levelSeed = '0.8217183739623661';
+//const levelSeed = Math.random() + '';
+const levelPrng = new Math.seedrandom(levelSeed);
+
 Math.random = undefined;
 
 // =========== //
@@ -266,6 +272,7 @@ const createLevel = ({
     prng,
     startx = 24,
     starty = 15,
+    animatedUpdatedTile = () => {},
 }) => {
     const level = [];
 
@@ -299,7 +306,19 @@ const createLevel = ({
 
     // floor at starting point
     level[startx][starty].type = FLOOR;
+    animatedUpdateTile(startx, starty, FLOOR, 4);
     
+    // animate border
+    forEachTile((x, y) => {
+        if (!inInnerBounds(width, height, x, y)) {
+            if (y === 0 || y === height - 1) {
+                animatedUpdateTile(x, y, WALL, 10);
+            } else {
+                animatedUpdateTile(x, y, WALL, 5);
+            }
+        }
+    });
+
     // main algorithm
     const scrambledTiles = [];
     forEachInnerTile((x, y) => {
@@ -312,6 +331,9 @@ const createLevel = ({
         const {x, y} = scrambledTiles[i];
         if (surrounded(x, y, isWall) || countGroups(x, y, isWall) !== 1) {
             level[x][y].type = FLOOR;
+            animatedUpdateTile(x, y, FLOOR, 5);
+        } else if (level[x][y].type === WALL) {
+            animatedUpdateTile(x, y, WALL, 5);
         }
     }
 
@@ -334,6 +356,7 @@ const createLevel = ({
         if (level[x][y].type === WALL) {
             if (level[x][y].wallGroup.size < 6) {
                 level[x][y] = { type: FLOOR };
+                animatedUpdateTile(x, y, FLOOR);
             } else {
                 level[x][y] = { type: WALL };
             }
@@ -355,6 +378,7 @@ const createLevel = ({
     forEachInnerTile((x, y) => {
         if (level[x][y].type === FLOOR && !level[x][y].flooded) {
             level[x][y] = { type: WALL };
+            animatedUpdateTile(x, y, WALL);
         }
     });
 
@@ -373,6 +397,7 @@ const createLevel = ({
         }
 
         level[x][y] = { type: WALL };
+        animatedUpdateTile(x, y, WALL);
 
         for (const key in directions) {
             const {dx, dy} = directions[key];
@@ -412,7 +437,10 @@ const createLevel = ({
         floodFill(x, y, passable, callback);
 
         if (surroundedByTunnel) {
-            floodFill(x, y, (x, y) => level[x][y].type === WALL, (x, y) => level[x][y].type = FLOOR);
+            floodFill(x, y, (x, y) => level[x][y].type === WALL, (x, y) => {
+                level[x][y].type = FLOOR;
+                animatedUpdateTile(x, y, FLOOR);
+            });
         }
     });
 
@@ -450,6 +478,8 @@ const createLevel = ({
             tile.cave.tiles.splice(fill, 1);
 
             level[fillCoords.x][fillCoords.y] = { type: WALL };
+            animatedUpdateTile(fillCoords.x, fillCoords.y, WALL);
+
             fillDead(keepCoords.x, keepCoords.y);
         }
     });
@@ -509,8 +539,10 @@ const createLevel = ({
 const createGame = ({
     width,
     height,
-    prng,
+    mainPrng,
+    levelPrng,
     updateTile,
+    animatedUpdateTile,
     updateDraw,
 }) => {
     const game = {};
@@ -520,15 +552,16 @@ const createGame = ({
     let level = createLevel({
         width,
         height,
-        prng,
+        prng: levelPrng,
+        animatedUpdateTile,
     });
 
-    forEachTile((x, y) => {
+    /*forEachTile((x, y) => {
         updateTile(x, y, {
             type: level[x][y].type,
             light: level[x][y].light,
         });
-    });
+    });*/
 
     updateDraw();
 };
@@ -615,11 +648,19 @@ const level = [];
 for (let x = 0; x < WIDTH; x++) {
     level[x] = [];
     for (let y = 0; y < HEIGHT; y++) {
-        level[x][y] = {};
+        level[x][y] = { type: WALL };
     }
 }
 
 const forEachTile = forEachTileOfLevel.bind(null, WIDTH, HEIGHT);
+
+const drawTile = (x, y, type) => {
+    const ctx = ctxs[y];
+    const displayTile = displayTiles[type];
+    const realx = (x - (HEIGHT - y - 1) / 2) * XU;
+    ctx.clearRect(realx, 0, XU, TILEHEIGHT);
+    ctx.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
+};
 
 const draw = () => {
     forEachTile((x, y) => {
@@ -630,6 +671,30 @@ const draw = () => {
             ctx.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
         }
     });
+};
+
+// level generation animation
+let animating = false;
+
+const tileAnimationQueue = [];
+
+const animateTile = () => {
+    const tileAnim = tileAnimationQueue.shift();
+    if (!tileAnim) {
+        animating = false;
+        return;
+    }
+    const {x, y, type, delay} = tileAnim;
+    drawTile(x, y, type);
+    setTimeout(animateTile, delay);
+};
+
+const animatedUpdateTile = (x, y, type, delay = 100) => {
+    tileAnimationQueue.push({x, y, type, delay});
+    if (!animating) {
+        animating = true;
+        animateTile();
+    }
 };
 
 const updateTile = (x, y, attributes) => {
@@ -649,8 +714,10 @@ const startGame = () => {
     game = createGame({
         width: WIDTH,
         height: HEIGHT,
-        prng,
+        mainPrng,
+        levelPrng,
         updateTile,
+        animatedUpdateTile,
         updateDraw,
     });
 };

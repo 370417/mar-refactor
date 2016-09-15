@@ -6,7 +6,13 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
 // #PRNG //
 // ===== //
 
-var prng = Math.random;
+var mainSeed = Math.random() + '';
+var mainPrng = new Math.seedrandom(mainSeed);
+
+var levelSeed = '0.8217183739623661';
+//const levelSeed = Math.random() + '';
+var levelPrng = new Math.seedrandom(levelSeed);
+
 Math.random = undefined;
 
 // =========== //
@@ -295,6 +301,8 @@ var createLevel = function createLevel(_ref) {
     var startx = _ref$startx === undefined ? 24 : _ref$startx;
     var _ref$starty = _ref.starty;
     var starty = _ref$starty === undefined ? 15 : _ref$starty;
+    var _ref$animatedUpdatedT = _ref.animatedUpdatedTile;
+    var animatedUpdatedTile = _ref$animatedUpdatedT === undefined ? function () {} : _ref$animatedUpdatedT;
 
     var level = [];
 
@@ -330,6 +338,18 @@ var createLevel = function createLevel(_ref) {
 
     // floor at starting point
     level[startx][starty].type = FLOOR;
+    animatedUpdateTile(startx, starty, FLOOR, 4);
+
+    // animate border
+    forEachTile(function (x, y) {
+        if (!inInnerBounds(width, height, x, y)) {
+            if (y === 0 || y === height - 1) {
+                animatedUpdateTile(x, y, WALL, 10);
+            } else {
+                animatedUpdateTile(x, y, WALL, 5);
+            }
+        }
+    });
 
     // main algorithm
     var scrambledTiles = [];
@@ -348,6 +368,9 @@ var createLevel = function createLevel(_ref) {
 
         if (surrounded(_x2, _y, isWall) || countGroups(_x2, _y, isWall) !== 1) {
             level[_x2][_y].type = FLOOR;
+            animatedUpdateTile(_x2, _y, FLOOR, 5);
+        } else if (level[_x2][_y].type === WALL) {
+            animatedUpdateTile(_x2, _y, WALL, 5);
         }
     }
 
@@ -372,6 +395,7 @@ var createLevel = function createLevel(_ref) {
         if (level[x][y].type === WALL) {
             if (level[x][y].wallGroup.size < 6) {
                 level[x][y] = { type: FLOOR };
+                animatedUpdateTile(x, y, FLOOR);
             } else {
                 level[x][y] = { type: WALL };
             }
@@ -397,6 +421,7 @@ var createLevel = function createLevel(_ref) {
     forEachInnerTile(function (x, y) {
         if (level[x][y].type === FLOOR && !level[x][y].flooded) {
             level[x][y] = { type: WALL };
+            animatedUpdateTile(x, y, WALL);
         }
     });
 
@@ -417,6 +442,7 @@ var createLevel = function createLevel(_ref) {
         }
 
         level[x][y] = { type: WALL };
+        animatedUpdateTile(x, y, WALL);
 
         for (var key in directions) {
             var _directions$key4 = directions[key];
@@ -467,7 +493,8 @@ var createLevel = function createLevel(_ref) {
             floodFill(x, y, function (x, y) {
                 return level[x][y].type === WALL;
             }, function (x, y) {
-                return level[x][y].type = FLOOR;
+                level[x][y].type = FLOOR;
+                animatedUpdateTile(x, y, FLOOR);
             });
         }
     });
@@ -510,6 +537,8 @@ var createLevel = function createLevel(_ref) {
             tile.cave.tiles.splice(fill, 1);
 
             level[fillCoords.x][fillCoords.y] = { type: WALL };
+            animatedUpdateTile(fillCoords.x, fillCoords.y, WALL);
+
             fillDead(keepCoords.x, keepCoords.y);
         }
     });
@@ -579,8 +608,10 @@ var createLevel = function createLevel(_ref) {
 var createGame = function createGame(_ref2) {
     var width = _ref2.width;
     var height = _ref2.height;
-    var prng = _ref2.prng;
+    var mainPrng = _ref2.mainPrng;
+    var levelPrng = _ref2.levelPrng;
     var updateTile = _ref2.updateTile;
+    var animatedUpdateTile = _ref2.animatedUpdateTile;
     var updateDraw = _ref2.updateDraw;
 
     var game = {};
@@ -590,15 +621,16 @@ var createGame = function createGame(_ref2) {
     var level = createLevel({
         width: width,
         height: height,
-        prng: prng
+        prng: levelPrng,
+        animatedUpdateTile: animatedUpdateTile
     });
 
-    forEachTile(function (x, y) {
+    /*forEachTile((x, y) => {
         updateTile(x, y, {
             type: level[x][y].type,
-            light: level[x][y].light
+            light: level[x][y].light,
         });
-    });
+    });*/
 
     updateDraw();
 };
@@ -685,11 +717,19 @@ var level = [];
 for (var x = 0; x < WIDTH; x++) {
     level[x] = [];
     for (var y = 0; y < HEIGHT; y++) {
-        level[x][y] = {};
+        level[x][y] = { type: WALL };
     }
 }
 
 var forEachTile = forEachTileOfLevel.bind(null, WIDTH, HEIGHT);
+
+var drawTile = function drawTile(x, y, type) {
+    var ctx = ctxs[y];
+    var displayTile = displayTiles[type];
+    var realx = (x - (HEIGHT - y - 1) / 2) * XU;
+    ctx.clearRect(realx, 0, XU, TILEHEIGHT);
+    ctx.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
+};
 
 var draw = function draw() {
     forEachTile(function (x, y) {
@@ -700,6 +740,36 @@ var draw = function draw() {
             _ctx2.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
         }
     });
+};
+
+// level generation animation
+var animating = false;
+
+var tileAnimationQueue = [];
+
+var animateTile = function animateTile() {
+    var tileAnim = tileAnimationQueue.shift();
+    if (!tileAnim) {
+        animating = false;
+        return;
+    }
+    var x = tileAnim.x;
+    var y = tileAnim.y;
+    var type = tileAnim.type;
+    var delay = tileAnim.delay;
+
+    drawTile(x, y, type);
+    setTimeout(animateTile, delay);
+};
+
+var animatedUpdateTile = function animatedUpdateTile(x, y, type) {
+    var delay = arguments.length <= 3 || arguments[3] === undefined ? 100 : arguments[3];
+
+    tileAnimationQueue.push({ x: x, y: y, type: type, delay: delay });
+    if (!animating) {
+        animating = true;
+        animateTile();
+    }
 };
 
 var updateTile = function updateTile(x, y, attributes) {
@@ -719,8 +789,10 @@ var startGame = function startGame() {
     game = createGame({
         width: WIDTH,
         height: HEIGHT,
-        prng: prng,
+        mainPrng: mainPrng,
+        levelPrng: levelPrng,
         updateTile: updateTile,
+        animatedUpdateTile: animatedUpdateTile,
         updateDraw: updateDraw
     });
 };
