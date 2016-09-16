@@ -270,6 +270,40 @@ const fov = (ox, oy, transparent, reveal, range = 9e9) => {
 };
 
 // ====== //
+// #Actor //
+// ====== //
+
+const baseActor = {
+    delay: 100,
+};
+
+// turn an onject into an actor prototypw
+const asActor = attributes => {
+    const base = Object.create(baseActor);
+    for (const key in attributes) {
+        base[key] = attributes[key];
+    }
+    return base;
+};
+
+const actors = {
+    player: {
+
+    },
+};
+
+// manually do inhertance for actors
+for (const key in actors) {
+    actors[key].name = key;
+    actors[key] = asActor(actors[key]);
+}
+
+const createActor = name => {
+    const actor = Object.create(actors[name]);
+    return actor;
+};
+
+// ====== //
 // #Level //
 // ====== //
 
@@ -280,6 +314,7 @@ const createLevel = ({
     startx = 24,
     starty = 15,
     animatedUpdatedTile = () => {},
+    player,
 }) => {
     const level = [];
 
@@ -564,11 +599,10 @@ const createLevel = ({
         }
     }
 
-    forEachInnerTile((x, y) => {
-        if (level[x][y].cave) {
-            //level[x][y].type = GRASS;
-        }
-    });
+    // place player
+    player.x = startx;
+    player.y = starty;
+    level[startx][starty].actor = player;
 
     return level;
 };
@@ -590,11 +624,15 @@ const createGame = ({
 
     const forEachTile = forEachTileOfLevel.bind(null, width, height);
 
+    // create player
+    const player = createActor('player');
+
     let level = createLevel({
         width,
         height,
         prng: levelPrng,
         animatedUpdateTile,
+        player,
     });
 
     /*forEachTile((x, y) => {
@@ -729,26 +767,28 @@ const draw = () => {
     });
 };
 
-// level generation animation
-let animating = false;
-
+// animate level generation animation
 const tileAnimationQueue = [];
 
 const animateTile = () => {
     const tileAnim = tileAnimationQueue.shift();
     if (!tileAnim) {
-        animating = false;
+        inputMode.pop();
         return;
     }
     const {x, y, type, delay} = tileAnim;
     drawTile(x, y, type);
-    setTimeout(animateTile, delay);
+    if (currMode() === 'animating') {
+        setTimeout(animateTile, delay);
+    } else {
+        animateTile();
+    }
 };
 
 const animatedUpdateTile = (x, y, type, delay = 16) => {
     tileAnimationQueue.push({x, y, type, delay});
-    if (!animating) {
-        animating = true;
+    if (currMode() !== 'animating') {
+        inputMode.push('animating');
         animateTile();
     }
 };
@@ -778,5 +818,69 @@ const startGame = () => {
     });
 };
 
+// ====== //
+// #Input //
+// ====== //
+
+const keyCode2code = {
+    '27': 'Escape',
+    '32': 'Space',
+    '37': 'ArrowLeft',
+    '38': 'ArrowUp',
+    '39': 'ArrowRight',
+    '40': 'ArrowDown',
+    '65': 'KeyA',
+    '66': 'KeyB',
+    '67': 'KeyC',
+    '68': 'KeyD',
+    '69': 'KeyE',
+    '70': 'KeyF',
+    '71': 'KeyG',
+    '72': 'KeyH',
+    '73': 'KeyI',
+    '74': 'KeyJ',
+    '75': 'KeyK',
+    '76': 'KeyL',
+    '77': 'KeyM',
+    '78': 'KeyN',
+    '79': 'KeyO',
+    '80': 'KeyP',
+    '81': 'KeyQ',
+    '82': 'KeyR',
+    '83': 'KeyS',
+    '84': 'KeyT',
+    '85': 'KeyU',
+    '86': 'KeyV',
+    '87': 'KeyW',
+    '88': 'KeyX',
+    '89': 'KeyY',
+    '90': 'KeyZ',
+};
+
+// stack of modes for input
+const inputMode = ['playing'];
+const currMode = () => inputMode[inputMode.length-1];
+
+// handles keydown for each mode
+const modalKeydown = {
+    animating: (code) => {
+        // skip animation
+        inputMode[inputMode.length-1] = 'skipping';
+    },
+    playing: (code) => {
+        
+    },
+};
+
+const keydown = (e) => {
+    const code = e.code || keyCode2code[e.keyCode];
+
+    modalKeydown[currMode()](code);
+};
+
+// start game
 tileset.addEventListener('load', startGame);
 tileset.src = 'tileset2.png';
+
+// add listeners
+window.addEventListener('keydown', keydown);

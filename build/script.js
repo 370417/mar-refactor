@@ -297,6 +297,38 @@ var fov = function fov(ox, oy, transparent, reveal) {
 };
 
 // ====== //
+// #Actor //
+// ====== //
+
+var baseActor = {
+    delay: 100
+};
+
+// turn an onject into an actor prototypw
+var asActor = function asActor(attributes) {
+    var base = Object.create(baseActor);
+    for (var key in attributes) {
+        base[key] = attributes[key];
+    }
+    return base;
+};
+
+var actors = {
+    player: {}
+};
+
+// manually do inhertance for actors
+for (var key in actors) {
+    actors[key].name = key;
+    actors[key] = asActor(actors[key]);
+}
+
+var createActor = function createActor(name) {
+    var actor = Object.create(actors[name]);
+    return actor;
+};
+
+// ====== //
 // #Level //
 // ====== //
 
@@ -310,6 +342,7 @@ var createLevel = function createLevel(_ref) {
     var starty = _ref$starty === undefined ? 15 : _ref$starty;
     var _ref$animatedUpdatedT = _ref.animatedUpdatedTile;
     var animatedUpdatedTile = _ref$animatedUpdatedT === undefined ? function () {} : _ref$animatedUpdatedT;
+    var player = _ref.player;
 
     var level = [];
 
@@ -458,10 +491,10 @@ var createLevel = function createLevel(_ref) {
         level[x][y] = { type: WALL };
         animatedUpdateTile(x, y, WALL);
 
-        for (var key in directions) {
-            var _directions$key4 = directions[key];
-            var dx = _directions$key4.dx;
-            var dy = _directions$key4.dy;
+        for (var _key in directions) {
+            var _directions$_key = directions[_key];
+            var dx = _directions$_key.dx;
+            var dy = _directions$_key.dy;
 
             fillDead(x + dx, y + dy);
         }
@@ -636,11 +669,10 @@ var createLevel = function createLevel(_ref) {
         }
     }
 
-    forEachInnerTile(function (x, y) {
-        if (level[x][y].cave) {
-            //level[x][y].type = GRASS;
-        }
-    });
+    // place player
+    player.x = startx;
+    player.y = starty;
+    level[startx][starty].actor = player;
 
     return level;
 };
@@ -662,11 +694,15 @@ var createGame = function createGame(_ref2) {
 
     var forEachTile = forEachTileOfLevel.bind(null, width, height);
 
+    // create player
+    var player = createActor('player');
+
     var level = createLevel({
         width: width,
         height: height,
         prng: levelPrng,
-        animatedUpdateTile: animatedUpdateTile
+        animatedUpdateTile: animatedUpdateTile,
+        player: player
     });
 
     /*forEachTile((x, y) => {
@@ -801,15 +837,13 @@ var draw = function draw() {
     });
 };
 
-// level generation animation
-var animating = false;
-
+// animate level generation animation
 var tileAnimationQueue = [];
 
 var animateTile = function animateTile() {
     var tileAnim = tileAnimationQueue.shift();
     if (!tileAnim) {
-        animating = false;
+        inputMode.pop();
         return;
     }
     var x = tileAnim.x;
@@ -818,22 +852,26 @@ var animateTile = function animateTile() {
     var delay = tileAnim.delay;
 
     drawTile(x, y, type);
-    setTimeout(animateTile, delay);
+    if (currMode() === 'animating') {
+        setTimeout(animateTile, delay);
+    } else {
+        animateTile();
+    }
 };
 
 var animatedUpdateTile = function animatedUpdateTile(x, y, type) {
     var delay = arguments.length <= 3 || arguments[3] === undefined ? 16 : arguments[3];
 
     tileAnimationQueue.push({ x: x, y: y, type: type, delay: delay });
-    if (!animating) {
-        animating = true;
+    if (currMode() !== 'animating') {
+        inputMode.push('animating');
         animateTile();
     }
 };
 
 var updateTile = function updateTile(x, y, attributes) {
-    for (var key in attributes) {
-        level[x][y][key] = attributes[key];
+    for (var _key2 in attributes) {
+        level[x][y][_key2] = attributes[_key2];
     }
 };
 
@@ -856,5 +894,69 @@ var startGame = function startGame() {
     });
 };
 
+// ====== //
+// #Input //
+// ====== //
+
+var keyCode2code = {
+    '27': 'Escape',
+    '32': 'Space',
+    '37': 'ArrowLeft',
+    '38': 'ArrowUp',
+    '39': 'ArrowRight',
+    '40': 'ArrowDown',
+    '65': 'KeyA',
+    '66': 'KeyB',
+    '67': 'KeyC',
+    '68': 'KeyD',
+    '69': 'KeyE',
+    '70': 'KeyF',
+    '71': 'KeyG',
+    '72': 'KeyH',
+    '73': 'KeyI',
+    '74': 'KeyJ',
+    '75': 'KeyK',
+    '76': 'KeyL',
+    '77': 'KeyM',
+    '78': 'KeyN',
+    '79': 'KeyO',
+    '80': 'KeyP',
+    '81': 'KeyQ',
+    '82': 'KeyR',
+    '83': 'KeyS',
+    '84': 'KeyT',
+    '85': 'KeyU',
+    '86': 'KeyV',
+    '87': 'KeyW',
+    '88': 'KeyX',
+    '89': 'KeyY',
+    '90': 'KeyZ'
+};
+
+// stack of modes for input
+var inputMode = ['playing'];
+var currMode = function currMode() {
+    return inputMode[inputMode.length - 1];
+};
+
+// handles keydown for each mode
+var modalKeydown = {
+    animating: function animating(code) {
+        // skip animation
+        inputMode[inputMode.length - 1] = 'skipping';
+    },
+    playing: function playing(code) {}
+};
+
+var keydown = function keydown(e) {
+    var code = e.code || keyCode2code[e.keyCode];
+
+    modalKeydown[currMode()](code);
+};
+
+// start game
 tileset.addEventListener('load', startGame);
 tileset.src = 'tileset2.png';
+
+// add listeners
+window.addEventListener('keydown', keydown);
