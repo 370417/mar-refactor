@@ -176,6 +176,32 @@ const floodFill = (x, y, passable, callback) => {
     }
 };
 
+// Scheduler
+const createSchedule = () => ({
+    add(actor, delta = 0) {
+        let prev = this;
+        let next = this.next;
+        while (next && next.delta <= delta) {
+            delta -= next.delta;
+            prev = next;
+            next = next.next;
+        }
+        if (next) {
+            next.delta -= delta;
+        }
+        prev.next = {actor, delta, next};
+        return this;
+    },
+    advance() {
+        if (!this.next) {
+            return undefined;
+        }
+        const actor = this.next.actor;
+        this.next = this.next.next;
+        return actor;
+    },
+});
+
 // round a number, but round down in case of x.5
 const roundTieDown = n => Math.ceil(n - 0.5);
 
@@ -437,17 +463,17 @@ const createLevel = ({
         if (!level[x][y].tunnel || countGroups(x, y, (x, y) => level[x][y].type === FLOOR) > 1) {
             return;
         }
-        if (x === startx && y === starty) {
-            level[x][y].tunnel = false;
-            level[x][y].cave = true;
-            return;
-        }
 
         level[x][y] = { type: WALL };
         animatedUpdateTile(x, y, WALL);
 
         for (const key in directions) {
             const {dx, dy} = directions[key];
+            if (x === startx && y === starty && level[x+dx][y+dy].type === FLOOR) {
+                startx = x + dx;
+                starty + x + dy;
+                console.log(startx, starty);
+            }
             fillDead(x + dx, y + dy);
         }
     };
@@ -517,7 +543,6 @@ const createLevel = ({
     forEachInnerTile((x, y) => {
         const tile = level[x][y];
         if (tile.cave && tile.cave !== true && tile.cave.tiles.length === 2) {
-            console.log('double found!');
             const keep = Math.round(prng());
             const fill = 1 - keep;
             const keepCoords = tile.cave.tiles[keep];
@@ -552,6 +577,7 @@ const createLevel = ({
                 prng,
                 startx,
                 starty,
+                player,
             });
         }
     }
@@ -635,6 +661,9 @@ const createGame = ({
         player,
     });
 
+    inputMode.push('animating');
+    animateTile();
+
     /*forEachTile((x, y) => {
         updateTile(x, y, {
             type: level[x][y].type,
@@ -693,31 +722,26 @@ const displayTiles = {
         spritex: 0,
         spritey: 0,
         color: 'hsl(40, 10%, 75%)',
-        darker: 'hsl(40, 10%, 30%)',
     },
     FLOOR: {
         spritex: 1,
         spritey: 0,
         color: 'hsl(0, 0%, 100%)',
-        darker: 'hsl(0, 0%, 40%)',
     },
     GRASS: {
         spritex: 2,
         spritey: 0,
         color: 'hsl(120, 50%, 50%)',
-        darker: 'hsl(120, 50%, 20%)',
     },
     BLANK: {
         spritex: 0,
         spritey: 0,
         color: 'transparent',
-        darker: 'transparent',
     },
     STAIRSDOWN: {
         spritex: 8,
         spritey: 0,
         color: 'hsl(40, 0%, 75%)',
-        darker: 'hsl(40, 0%, 30%)',
     },
 };
 
@@ -733,6 +757,16 @@ const cacheTiles = () => {
         ctx.globalCompositeOperation = 'source-in';
         ctx.fillRect(0, 0, XU, TILEHEIGHT);
         displayTile.canvas = canvas;
+
+        const bgcanvas = document.createElement('canvas');
+        bgcanvas.width = XU;
+        bgcanvas.height = TILEHEIGHT;
+        const bgctx = bgcanvas.getContext('2d');
+        bgctx.drawImage(canvas, 0, 0, XU, TILEHEIGHT);
+        bgctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        bgctx.globalCompositeOperation = 'source-atop';
+        bgctx.fillRect(0, 0, XU, TILEHEIGHT);
+        displayTile.bgcanvas = bgcanvas;
 
         displayTiles[TILES[TILE]] = displayTiles[TILE];
     }
