@@ -8,7 +8,7 @@ const mainPrng = new Math.seedrandom(mainSeed);
 // entrance has a tunnel level
 // const levelSeed = '0.5994896435923509';
 
-const levelSeed = Math.random() + '';
+const levelSeed = '0.7712855541978292' || Math.random() + '';
 console.log(levelSeed);
 const levelPrng = new Math.seedrandom(levelSeed);
 
@@ -338,12 +338,11 @@ const createLevel = ({
     prng,
     startx = 24,
     starty = 15,
-    animatedUpdateTile = () => {},
     player,
 }) => {
     let last;
     const animTile = (x, y, type, delta = 1) => {
-        last = animatedUpdateTile(x, y, type, delta, last);
+        last = animationQueue.add({x, y, type}, delta, last);
     };
 
     const level = [];
@@ -573,7 +572,9 @@ const createLevel = ({
             level[x][y].flooded = true;
         }
         floodFill(startx, starty, passable, callback);
-        if (size < 314) {
+        if (size < 314) {console.log('bananas');
+            // clear animationQueue so that previous level and this one don't get drawn at the same time
+            animationQueue.next = undefined;
             return createLevel({
                 width,
                 height,
@@ -646,7 +647,6 @@ const createGame = ({
     mainPrng,
     levelPrng,
     updateTile,
-    animatedUpdateTile,
     updateDraw,
 }) => {
     const game = {};
@@ -660,7 +660,6 @@ const createGame = ({
         width,
         height,
         prng: levelPrng,
-        animatedUpdateTile,
         player,
     });
 
@@ -832,10 +831,10 @@ const animateTile = () => {
     }
 };
 
-const animatedUpdateTile = (x, y, type, delta = 1, prev = animationQueue) => {
+/*const animatedUpdateTile = (x, y, type, delta = 1, prev = animationQueue) => {
     const last = animationQueue.add({x, y, type}, delta, prev);
     return last;
-};
+};*/
 
 const updateTile = (x, y, attributes) => {
     for (const key in attributes) {
@@ -857,7 +856,6 @@ const startGame = () => {
         mainPrng,
         levelPrng,
         updateTile,
-        animatedUpdateTile,
         updateDraw,
     });
 };
