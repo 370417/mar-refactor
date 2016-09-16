@@ -178,7 +178,7 @@ const floodFill = (x, y, passable, callback) => {
 
 // Scheduler
 const createSchedule = () => ({
-    add(actor, delta = 0, prev = this) {
+    add(event, delta = 0, prev = this) {
         let next = prev.next;
         while (next && next.delta <= delta) {
             delta -= next.delta;
@@ -188,7 +188,7 @@ const createSchedule = () => ({
         if (next) {
             next.delta -= delta;
         }
-        prev.next = {actor, delta, next};
+        prev.next = {event, delta, next};
         return prev.next;
     },
     advance() {
@@ -302,7 +302,7 @@ const baseActor = {
     delay: 100,
 };
 
-// turn an onject into an actor prototypw
+// turn an onject into an actor prototype
 const asActor = attributes => {
     const base = Object.create(baseActor);
     for (const key in attributes) {
@@ -338,9 +338,14 @@ const createLevel = ({
     prng,
     startx = 24,
     starty = 15,
-    animatedUpdatedTile = () => {},
+    animatedUpdateTile = () => {},
     player,
 }) => {
+    let last;
+    const animTile = (x, y, type, delta = 1) => {
+        last = animatedUpdateTile(x, y, type, delta, last);
+    };
+
     const level = [];
 
     for (let x = 0; x < width; x++) {
@@ -373,15 +378,15 @@ const createLevel = ({
 
     // floor at starting point
     level[startx][starty].type = FLOOR;
-    animatedUpdateTile(startx, starty, FLOOR, 4);
+    animTile(startx, starty, FLOOR);
     
     // animate border
     forEachTile((x, y) => {
         if (!inInnerBounds(width, height, x, y)) {
             if (y === 0 || y === height - 1) {
-                animatedUpdateTile(x, y, WALL, 10);
+                animTile(x, y, WALL);
             } else {
-                animatedUpdateTile(x, y, WALL, 5);
+                animTile(x, y, WALL);
             }
         }
     });
@@ -398,9 +403,9 @@ const createLevel = ({
         const {x, y} = scrambledTiles[i];
         if (surrounded(x, y, isWall) || countGroups(x, y, isWall) !== 1) {
             level[x][y].type = FLOOR;
-            animatedUpdateTile(x, y, FLOOR, 5);
+            animTile(x, y, FLOOR);
         } else if (level[x][y].type === WALL) {
-            animatedUpdateTile(x, y, WALL, 5);
+            animTile(x, y, WALL);
         }
     }
 
@@ -423,7 +428,7 @@ const createLevel = ({
         if (level[x][y].type === WALL) {
             if (level[x][y].wallGroup.size < 6) {
                 level[x][y] = { type: FLOOR };
-                animatedUpdateTile(x, y, FLOOR);
+                animTile(x, y, FLOOR);
             } else {
                 level[x][y] = { type: WALL };
             }
@@ -445,7 +450,7 @@ const createLevel = ({
     forEachInnerTile((x, y) => {
         if (level[x][y].type === FLOOR && !level[x][y].flooded) {
             level[x][y] = { type: WALL };
-            animatedUpdateTile(x, y, WALL);
+            animTile(x, y, WALL);
         }
     });
 
@@ -464,14 +469,13 @@ const createLevel = ({
         }
 
         level[x][y] = { type: WALL };
-        animatedUpdateTile(x, y, WALL);
+        animTile(x, y, WALL);
 
         for (const key in directions) {
             const {dx, dy} = directions[key];
             if (x === startx && y === starty && level[x+dx][y+dy].type === FLOOR) {
                 startx = x + dx;
                 starty + x + dy;
-                console.log(startx, starty);
             }
             fillDead(x + dx, y + dy);
         }
@@ -507,7 +511,7 @@ const createLevel = ({
             if (surroundedByTunnel) {
                 floodFill(x, y, (x, y) => level[x][y].type === WALL, (x, y) => {
                     level[x][y].type = FLOOR;
-                    animatedUpdateTile(x, y, FLOOR);
+                    animTile(x, y, FLOOR);
                 });
             }
         });
@@ -549,7 +553,7 @@ const createLevel = ({
             tile.cave.tiles.splice(fill, 1);
 
             level[fillCoords.x][fillCoords.y] = { type: WALL };
-            animatedUpdateTile(fillCoords.x, fillCoords.y, WALL);
+            animTile(fillCoords.x, fillCoords.y, WALL);
 
             level[keepCoords.x][keepCoords.y].tunnel = true;
             fillDead(keepCoords.x, keepCoords.y);
@@ -599,7 +603,7 @@ const createLevel = ({
     // for animation, erase walls with no light value
     forEachTile((x, y) => {
         if (!level[x][y].light) {
-            animatedUpdateTile(x, y, BLANK);
+            animTile(x, y, BLANK);
         }
     });
 
@@ -609,7 +613,7 @@ const createLevel = ({
         const {x, y} = scrambledTiles[i];
         if (!placedExit && level[x][y].cave && level[x][y].type === FLOOR && level[x][y].cave.tiles.length <= 12) {
             level[x][y].type = STAIRSDOWN;
-            animatedUpdateTile(x, y, STAIRSDOWN);
+            animTile(x, y, STAIRSDOWN);
             placedExit = true;
         }
     }
@@ -618,7 +622,7 @@ const createLevel = ({
             const {x, y} = scrambledTiles[i];
             if (!placedExit && level[x][y].type === FLOOR) {
                 level[x][y].type = STAIRSDOWN;
-                animatedUpdateTile(x, y, STAIRSDOWN);
+                animTile(x, y, STAIRSDOWN);
                 placedExit = true;
             }
         }
@@ -801,29 +805,36 @@ const draw = () => {
 };
 
 // animate level generation animation
-const tileAnimationQueue = [];
+const animationQueue = createSchedule();
+
+const setTickout = (fun, tick) => {
+    if (tick < 2) {
+        requestAnimationFrame(fun);
+    } else {
+        requestAnimationFrame(() => {
+            setTickout(fun, tick - 1);
+        });
+    }
+};
 
 const animateTile = () => {
-    const tileAnim = tileAnimationQueue.shift();
-    if (!tileAnim) {
+    const next = animationQueue.advance();
+    if (!next) {
         inputMode.pop();
         return;
     }
-    const {x, y, type, delay} = tileAnim;
+    const {event: {x, y, type}, delta} = next;
     drawTile(x, y, type);
-    if (currMode() === 'animating') {
-        setTimeout(animateTile, delay);
+    if (delta && currMode() === 'animating') {
+        setTickout(animateTile, delta);
     } else {
         animateTile();
     }
 };
 
-const animatedUpdateTile = (x, y, type, delay = 16) => {
-    tileAnimationQueue.push({x, y, type, delay});
-    if (currMode() !== 'animating') {
-        inputMode.push('animating');
-        animateTile();
-    }
+const animatedUpdateTile = (x, y, type, delta = 1, prev = animationQueue) => {
+    const last = animationQueue.add({x, y, type}, delta, prev);
+    return last;
 };
 
 const updateTile = (x, y, attributes) => {
