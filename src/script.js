@@ -5,8 +5,11 @@
 const mainSeed = Math.random() + '';
 const mainPrng = new Math.seedrandom(mainSeed);
 
-const levelSeed = '0.8217183739623661';
-//const levelSeed = Math.random() + '';
+// entrance has a tunnel level
+// const levelSeed = '0.5994896435923509';
+
+const levelSeed = Math.random() + '';
+console.log(levelSeed);
 const levelPrng = new Math.seedrandom(levelSeed);
 
 Math.random = undefined;
@@ -70,11 +73,15 @@ const directions = {DIR1, DIR3, DIR5, DIR7, DIR9, DIR11};
 const WALL = 0;
 const FLOOR = 1;
 const GRASS = 2;
+const BLANK = -1;
+const STAIRSDOWN = 3;
 
 const TILES = {
     WALL,
     FLOOR,
     GRASS,
+    BLANK,
+    STAIRSDOWN,
 };
 
 // ========== //
@@ -392,7 +399,12 @@ const createLevel = ({
     // fill in dead ends
     const isNotCave = (x, y) => !level[x][y].cave;
     const fillDead = (x, y) => {
-        if (!level[x][y].cave || !surrounded(x, y, isNotCave)) {
+        if (!level[x][y].tunnel || countGroups(x, y, (x, y) => level[x][y].type === FLOOR) > 1) {
+            return;
+        }
+        if (x === startx && y === starty) {
+            level[x][y].tunnel = false;
+            level[x][y].cave = true;
             return;
         }
 
@@ -401,54 +413,52 @@ const createLevel = ({
 
         for (const key in directions) {
             const {dx, dy} = directions[key];
-            const tile = level[x+dx][y+dy];
-            if (tile.type === FLOOR && tile.tunnel) {
-                if (countGroups(x + dx, y + dy, (x, y) => level[x][y].type === FLOOR) === 1) {
-                    tile.tunnel = false;
-                    tile.cave = true;
-                }
-            }
-        }
-
-        for (const key in directions) {
-            const {dx, dy} = directions[key];
             fillDead(x + dx, y + dy);
         }
     };
-    forEachInnerTile((x, y) => {
-        fillDead(x, y);
-    });
+    const fillDeadEnds = () => {
+        forEachInnerTile((x, y) => {
+            if (level[x][y].cave && surrounded(x, y, isNotCave)) {
+                level[x][y].tunnel = true;
+                fillDead(x, y);
+            }
+        });
+    }
+    fillDeadEnds();
 
     // find groups of wall totally surrounded by tunnel and turn them to floor
-    forEachInnerTile((x, y) => {
-        if (level[x][y].type === FLOOR || level[x][y].flooded) {
-            return;
-        }
-        let surroundedByTunnel = true;
-        const passable = (x, y) => {
-            if (!inInnerBounds(width, height, x, y) || level[x][y].cave) {
-                surroundedByTunnel = false;
+    const carveTunnelLoops = () => {
+        forEachInnerTile((x, y) => {
+            if (level[x][y].type === FLOOR || level[x][y].flooded) {
+                return;
             }
-            return inBounds(width, height, x, y) && level[x][y].type === WALL && !level[x][y].flooded;
-        }
-        const callback = (x, y) => {
-            level[x][y].flooded = true;
-        }
-        floodFill(x, y, passable, callback);
+            let surroundedByTunnel = true;
+            const passable = (x, y) => {
+                if (!inInnerBounds(width, height, x, y) || level[x][y].cave) {
+                    surroundedByTunnel = false;
+                }
+                return inBounds(width, height, x, y) && level[x][y].type === WALL && !level[x][y].flooded;
+            }
+            const callback = (x, y) => {
+                level[x][y].flooded = true;
+            }
+            floodFill(x, y, passable, callback);
 
-        if (surroundedByTunnel) {
-            floodFill(x, y, (x, y) => level[x][y].type === WALL, (x, y) => {
-                level[x][y].type = FLOOR;
-                animatedUpdateTile(x, y, FLOOR);
-            });
-        }
-    });
+            if (surroundedByTunnel) {
+                floodFill(x, y, (x, y) => level[x][y].type === WALL, (x, y) => {
+                    level[x][y].type = FLOOR;
+                    animatedUpdateTile(x, y, FLOOR);
+                });
+            }
+        });
+    }
 
     // recalculate cave/tunnel status and fill any new dead ends
     findCavesTunnels();
-    forEachInnerTile((x, y) => {
-        fillDead(x, y);
-    });
+    fillDeadEnds();
+
+    // look for any new tunnel loops
+    carveTunnelLoops();
 
     // floodfill caves
     const findCaves = () => {
@@ -466,11 +476,13 @@ const createLevel = ({
             }
         });
     };
+    findCaves();
 
     // remove 2-tile caves
     forEachInnerTile((x, y) => {
         const tile = level[x][y];
         if (tile.cave && tile.cave !== true && tile.cave.tiles.length === 2) {
+            console.log('double found!');
             const keep = Math.round(prng());
             const fill = 1 - keep;
             const keepCoords = tile.cave.tiles[keep];
@@ -480,6 +492,7 @@ const createLevel = ({
             level[fillCoords.x][fillCoords.y] = { type: WALL };
             animatedUpdateTile(fillCoords.x, fillCoords.y, WALL);
 
+            level[keepCoords.x][keepCoords.y].tunnel = true;
             fillDead(keepCoords.x, keepCoords.y);
         }
     });
@@ -497,7 +510,7 @@ const createLevel = ({
             level[x][y].flooded = true;
         }
         floodFill(startx, starty, passable, callback);
-        if (size < 350) {
+        if (size < 314) {
             return createLevel({
                 width,
                 height,
@@ -522,6 +535,34 @@ const createLevel = ({
             fov(x, y, transparent, reveal);
         }
     });
+
+    // for animation, erase walls with no light value
+    forEachTile((x, y) => {
+        if (!level[x][y].light) {
+            animatedUpdateTile(x, y, BLANK);
+        }
+    });
+
+    // place exit
+    let placedExit = false;
+    for (let i = 0; i < scrambledTiles.length; i++) {
+        const {x, y} = scrambledTiles[i];
+        if (!placedExit && level[x][y].cave && level[x][y].type === FLOOR && level[x][y].cave.tiles.length <= 12) {
+            level[x][y].type = STAIRSDOWN;
+            animatedUpdateTile(x, y, STAIRSDOWN);
+            placedExit = true;
+        }
+    }
+    if (!placedExit) {
+        for (let i = 0; i < scrambledTiles.length; i++) {
+            const {x, y} = scrambledTiles[i];
+            if (!placedExit && level[x][y].type === FLOOR) {
+                level[x][y].type = STAIRSDOWN;
+                animatedUpdateTile(x, y, STAIRSDOWN);
+                placedExit = true;
+            }
+        }
+    }
 
     forEachInnerTile((x, y) => {
         if (level[x][y].cave) {
@@ -613,17 +654,32 @@ const displayTiles = {
     WALL: {
         spritex: 0,
         spritey: 0,
-        color: '#BBB',
+        color: 'hsl(40, 10%, 75%)',
+        darker: 'hsl(40, 10%, 30%)',
     },
     FLOOR: {
         spritex: 1,
         spritey: 0,
-        color: '#FFF',
+        color: 'hsl(0, 0%, 100%)',
+        darker: 'hsl(0, 0%, 40%)',
     },
     GRASS: {
         spritex: 2,
         spritey: 0,
-        color: '#8F8',
+        color: 'hsl(120, 50%, 50%)',
+        darker: 'hsl(120, 50%, 20%)',
+    },
+    BLANK: {
+        spritex: 0,
+        spritey: 0,
+        color: 'transparent',
+        darker: 'transparent',
+    },
+    STAIRSDOWN: {
+        spritex: 8,
+        spritey: 0,
+        color: 'hsl(40, 0%, 75%)',
+        darker: 'hsl(40, 0%, 30%)',
     },
 };
 
@@ -689,7 +745,7 @@ const animateTile = () => {
     setTimeout(animateTile, delay);
 };
 
-const animatedUpdateTile = (x, y, type, delay = 100) => {
+const animatedUpdateTile = (x, y, type, delay = 16) => {
     tileAnimationQueue.push({x, y, type, delay});
     if (!animating) {
         animating = true;

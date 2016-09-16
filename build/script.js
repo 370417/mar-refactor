@@ -9,8 +9,11 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
 var mainSeed = Math.random() + '';
 var mainPrng = new Math.seedrandom(mainSeed);
 
-var levelSeed = '0.8217183739623661';
-//const levelSeed = Math.random() + '';
+// entrance has a tunnel level
+// const levelSeed = '0.5994896435923509';
+
+var levelSeed = Math.random() + '';
+console.log(levelSeed);
 var levelPrng = new Math.seedrandom(levelSeed);
 
 Math.random = undefined;
@@ -74,11 +77,15 @@ var directions = { DIR1: DIR1, DIR3: DIR3, DIR5: DIR5, DIR7: DIR7, DIR9: DIR9, D
 var WALL = 0;
 var FLOOR = 1;
 var GRASS = 2;
+var BLANK = -1;
+var STAIRSDOWN = 3;
 
 var TILES = {
     WALL: WALL,
     FLOOR: FLOOR,
-    GRASS: GRASS
+    GRASS: GRASS,
+    BLANK: BLANK,
+    STAIRSDOWN: STAIRSDOWN
 };
 
 // ========== //
@@ -437,7 +444,14 @@ var createLevel = function createLevel(_ref) {
         return !level[x][y].cave;
     };
     var fillDead = function fillDead(x, y) {
-        if (!level[x][y].cave || !surrounded(x, y, isNotCave)) {
+        if (!level[x][y].tunnel || countGroups(x, y, function (x, y) {
+            return level[x][y].type === FLOOR;
+        }) > 1) {
+            return;
+        }
+        if (x === startx && y === starty) {
+            level[x][y].tunnel = false;
+            level[x][y].cave = true;
             return;
         }
 
@@ -449,61 +463,54 @@ var createLevel = function createLevel(_ref) {
             var dx = _directions$key4.dx;
             var dy = _directions$key4.dy;
 
-            var tile = level[x + dx][y + dy];
-            if (tile.type === FLOOR && tile.tunnel) {
-                if (countGroups(x + dx, y + dy, function (x, y) {
-                    return level[x][y].type === FLOOR;
-                }) === 1) {
-                    tile.tunnel = false;
-                    tile.cave = true;
-                }
-            }
-        }
-
-        for (var _key in directions) {
-            var _directions$_key = directions[_key];
-            var dx = _directions$_key.dx;
-            var dy = _directions$_key.dy;
-
             fillDead(x + dx, y + dy);
         }
     };
-    forEachInnerTile(function (x, y) {
-        fillDead(x, y);
-    });
+    var fillDeadEnds = function fillDeadEnds() {
+        forEachInnerTile(function (x, y) {
+            if (level[x][y].cave && surrounded(x, y, isNotCave)) {
+                level[x][y].tunnel = true;
+                fillDead(x, y);
+            }
+        });
+    };
+    fillDeadEnds();
 
     // find groups of wall totally surrounded by tunnel and turn them to floor
-    forEachInnerTile(function (x, y) {
-        if (level[x][y].type === FLOOR || level[x][y].flooded) {
-            return;
-        }
-        var surroundedByTunnel = true;
-        var passable = function passable(x, y) {
-            if (!inInnerBounds(width, height, x, y) || level[x][y].cave) {
-                surroundedByTunnel = false;
+    var carveTunnelLoops = function carveTunnelLoops() {
+        forEachInnerTile(function (x, y) {
+            if (level[x][y].type === FLOOR || level[x][y].flooded) {
+                return;
             }
-            return inBounds(width, height, x, y) && level[x][y].type === WALL && !level[x][y].flooded;
-        };
-        var callback = function callback(x, y) {
-            level[x][y].flooded = true;
-        };
-        floodFill(x, y, passable, callback);
+            var surroundedByTunnel = true;
+            var passable = function passable(x, y) {
+                if (!inInnerBounds(width, height, x, y) || level[x][y].cave) {
+                    surroundedByTunnel = false;
+                }
+                return inBounds(width, height, x, y) && level[x][y].type === WALL && !level[x][y].flooded;
+            };
+            var callback = function callback(x, y) {
+                level[x][y].flooded = true;
+            };
+            floodFill(x, y, passable, callback);
 
-        if (surroundedByTunnel) {
-            floodFill(x, y, function (x, y) {
-                return level[x][y].type === WALL;
-            }, function (x, y) {
-                level[x][y].type = FLOOR;
-                animatedUpdateTile(x, y, FLOOR);
-            });
-        }
-    });
+            if (surroundedByTunnel) {
+                floodFill(x, y, function (x, y) {
+                    return level[x][y].type === WALL;
+                }, function (x, y) {
+                    level[x][y].type = FLOOR;
+                    animatedUpdateTile(x, y, FLOOR);
+                });
+            }
+        });
+    };
 
     // recalculate cave/tunnel status and fill any new dead ends
     findCavesTunnels();
-    forEachInnerTile(function (x, y) {
-        fillDead(x, y);
-    });
+    fillDeadEnds();
+
+    // look for any new tunnel loops
+    carveTunnelLoops();
 
     // floodfill caves
     var findCaves = function findCaves() {
@@ -525,11 +532,13 @@ var createLevel = function createLevel(_ref) {
             }
         });
     };
+    findCaves();
 
     // remove 2-tile caves
     forEachInnerTile(function (x, y) {
         var tile = level[x][y];
         if (tile.cave && tile.cave !== true && tile.cave.tiles.length === 2) {
+            console.log('double found!');
             var keep = Math.round(prng());
             var fill = 1 - keep;
             var keepCoords = tile.cave.tiles[keep];
@@ -539,6 +548,7 @@ var createLevel = function createLevel(_ref) {
             level[fillCoords.x][fillCoords.y] = { type: WALL };
             animatedUpdateTile(fillCoords.x, fillCoords.y, WALL);
 
+            level[keepCoords.x][keepCoords.y].tunnel = true;
             fillDead(keepCoords.x, keepCoords.y);
         }
     });
@@ -559,7 +569,7 @@ var createLevel = function createLevel(_ref) {
                 level[x][y].flooded = true;
             };
             floodFill(startx, starty, passable, callback);
-            if (size < 350) {
+            if (size < 314) {
                 return {
                     v: createLevel({
                         width: width,
@@ -591,6 +601,40 @@ var createLevel = function createLevel(_ref) {
             fov(x, y, transparent, reveal);
         }
     });
+
+    // for animation, erase walls with no light value
+    forEachTile(function (x, y) {
+        if (!level[x][y].light) {
+            animatedUpdateTile(x, y, BLANK);
+        }
+    });
+
+    // place exit
+    var placedExit = false;
+    for (var _i = 0; _i < scrambledTiles.length; _i++) {
+        var _scrambledTiles$_i = scrambledTiles[_i];
+        var _x3 = _scrambledTiles$_i.x;
+        var _y2 = _scrambledTiles$_i.y;
+
+        if (!placedExit && level[_x3][_y2].cave && level[_x3][_y2].type === FLOOR && level[_x3][_y2].cave.tiles.length <= 12) {
+            level[_x3][_y2].type = STAIRSDOWN;
+            animatedUpdateTile(_x3, _y2, STAIRSDOWN);
+            placedExit = true;
+        }
+    }
+    if (!placedExit) {
+        for (var _i2 = 0; _i2 < scrambledTiles.length; _i2++) {
+            var _scrambledTiles$_i2 = scrambledTiles[_i2];
+            var _x4 = _scrambledTiles$_i2.x;
+            var _y3 = _scrambledTiles$_i2.y;
+
+            if (!placedExit && level[_x4][_y3].type === FLOOR) {
+                level[_x4][_y3].type = STAIRSDOWN;
+                animatedUpdateTile(_x4, _y3, STAIRSDOWN);
+                placedExit = true;
+            }
+        }
+    }
 
     forEachInnerTile(function (x, y) {
         if (level[x][y].cave) {
@@ -682,17 +726,32 @@ var displayTiles = {
     WALL: {
         spritex: 0,
         spritey: 0,
-        color: '#BBB'
+        color: 'hsl(40, 10%, 75%)',
+        darker: 'hsl(40, 10%, 30%)'
     },
     FLOOR: {
         spritex: 1,
         spritey: 0,
-        color: '#FFF'
+        color: 'hsl(0, 0%, 100%)',
+        darker: 'hsl(0, 0%, 40%)'
     },
     GRASS: {
         spritex: 2,
         spritey: 0,
-        color: '#8F8'
+        color: 'hsl(120, 50%, 50%)',
+        darker: 'hsl(120, 50%, 20%)'
+    },
+    BLANK: {
+        spritex: 0,
+        spritey: 0,
+        color: 'transparent',
+        darker: 'transparent'
+    },
+    STAIRSDOWN: {
+        spritex: 8,
+        spritey: 0,
+        color: 'hsl(40, 0%, 75%)',
+        darker: 'hsl(40, 0%, 30%)'
     }
 };
 
@@ -763,7 +822,7 @@ var animateTile = function animateTile() {
 };
 
 var animatedUpdateTile = function animatedUpdateTile(x, y, type) {
-    var delay = arguments.length <= 3 || arguments[3] === undefined ? 100 : arguments[3];
+    var delay = arguments.length <= 3 || arguments[3] === undefined ? 16 : arguments[3];
 
     tileAnimationQueue.push({ x: x, y: y, type: type, delay: delay });
     if (!animating) {

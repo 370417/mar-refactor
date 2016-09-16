@@ -1,5 +1,5 @@
 .DS_Store
 node_modules
 *.xcf
-build/bundle.js
+build/script.js
 ideas.txt
