@@ -8,7 +8,7 @@ const mainPrng = new Math.seedrandom(mainSeed);
 // entrance has a tunnel level
 // const levelSeed = '0.5994896435923509';
 
-const levelSeed = '0.7712855541978292' || Math.random() + '';
+const levelSeed = Math.random() + '';
 console.log(levelSeed);
 const levelPrng = new Math.seedrandom(levelSeed);
 
@@ -342,7 +342,11 @@ const createLevel = ({
 }) => {
     let last;
     const animTile = (x, y, type, delta = 1) => {
-        last = animationQueue.add({x, y, type}, delta, last);
+        last = animationQueue.add({x, y, tile: {
+            type,
+            visible: false,
+            seen: true,
+        }}, delta, last);
     };
 
     const level = [];
@@ -380,7 +384,7 @@ const createLevel = ({
     animTile(startx, starty, FLOOR);
     
     // animate border
-    forEachTile((x, y) => {
+    /*forEachTile((x, y) => {
         if (!inInnerBounds(width, height, x, y)) {
             if (y === 0 || y === height - 1) {
                 animTile(x, y, WALL);
@@ -389,6 +393,24 @@ const createLevel = ({
             }
         }
     });
+    const inBounds = (width, height, x, y) => {
+    return y >= 0 &&
+           y < height &&
+           x >= Math.floor((height - y) / 2) &&
+           x < width - Math.floor(y / 2);
+};*/
+    for (let x = Math.floor(height / 2), y = 0; x < width; x++) {
+        animTile(x, y, WALL);
+    }
+    for (let x = width - 1, y = 1; y < height; y++, x = width - Math.floor(y / 2) - 1) {
+        animTile(x, y, WALL);
+    }
+    for (let x = width - Math.floor(height / 2) - 1, y = height - 1; x >= 0; x--) {
+        animTile(x, y, WALL);
+    }
+    for (let x = 0, y = height - 1; y > 0; y--, x = Math.floor((height - y) / 2)) {
+        animTile(x, y, WALL);
+    }
 
     // main algorithm
     const scrambledTiles = [];
@@ -572,7 +594,7 @@ const createLevel = ({
             level[x][y].flooded = true;
         }
         floodFill(startx, starty, passable, callback);
-        if (size < 314) {console.log('bananas');
+        if (size < 314) {
             // clear animationQueue so that previous level and this one don't get drawn at the same time
             animationQueue.next = undefined;
             return createLevel({
@@ -784,12 +806,18 @@ for (let x = 0; x < WIDTH; x++) {
 
 const forEachTile = forEachTileOfLevel.bind(null, WIDTH, HEIGHT);
 
-const drawTile = (x, y, type) => {
+const drawTile = (x, y, {type, seen, visible}) => {
     const ctx = ctxs[y];
     const displayTile = displayTiles[type];
     const realx = (x - (HEIGHT - y - 1) / 2) * XU;
     ctx.clearRect(realx, 0, XU, TILEHEIGHT);
-    ctx.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
+    if (seen) {
+        if (visible) {
+            ctx.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
+        } else {
+            ctx.drawImage(displayTile.bgcanvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
+        }
+    }
 };
 
 const draw = () => {
@@ -822,8 +850,8 @@ const animateTile = () => {
         inputMode.pop();
         return;
     }
-    const {event: {x, y, type}, delta} = next;
-    drawTile(x, y, type);
+    const {event: {x, y, tile}, delta} = next;
+    drawTile(x, y, tile);
     if (delta && currMode() === 'animating') {
         setTickout(animateTile, delta);
     } else {
