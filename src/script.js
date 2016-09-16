@@ -178,9 +178,8 @@ const floodFill = (x, y, passable, callback) => {
 
 // Scheduler
 const createSchedule = () => ({
-    add(actor, delta = 0) {
-        let prev = this;
-        let next = this.next;
+    add(actor, delta = 0, prev = this) {
+        let next = prev.next;
         while (next && next.delta <= delta) {
             delta -= next.delta;
             prev = next;
@@ -190,15 +189,15 @@ const createSchedule = () => ({
             next.delta -= delta;
         }
         prev.next = {actor, delta, next};
-        return this;
+        return prev.next;
     },
     advance() {
         if (!this.next) {
             return undefined;
         }
-        const actor = this.next.actor;
+        const next = this.next;
         this.next = this.next.next;
-        return actor;
+        return next;
     },
 });
 
