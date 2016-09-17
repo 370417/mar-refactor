@@ -73,14 +73,12 @@ const directions = {DIR1, DIR3, DIR5, DIR7, DIR9, DIR11};
 const WALL = 0;
 const FLOOR = 1;
 const GRASS = 2;
-const BLANK = -1;
 const STAIRSDOWN = 3;
 
 const TILES = {
     WALL,
     FLOOR,
     GRASS,
-    BLANK,
     STAIRSDOWN,
 };
 
@@ -231,17 +229,17 @@ const normal = [
 ];
 
 const fov = (ox, oy, transparent, reveal, range = 9e9) => {
-    reveal(ox, oy);
+    reveal(ox, oy, 0);
 
-    const revealWall = (x, y) => {
+    const revealWall = (x, y, radius) => {
         if (!transparent(x, y)) {
-            reveal(x, y);
+            reveal(x, y, radius);
         }
     };
 
     for (const key in directions) {
         const {dx, dy} = directions[key];
-        revealWall(ox + dx, oy + dy);
+        revealWall(ox + dx, oy + dy, 1);
     }
 
     const polar2rect = (radius, angle) => {
@@ -263,15 +261,15 @@ const fov = (ox, oy, transparent, reveal, range = 9e9) => {
             if (transparent(x, y)) {
                 current = arc / radius;
                 if (current >= start && current <= end) {
-                    reveal(x, y);
+                    reveal(x, y, radius);
                     someRevealed = true;
                     if (radius < range) {
-                        if (current >= 0 && current <= 2) { revealWall(x + 1, y - 1); }
-                        if (current >= 1 && current <= 3) { revealWall(x    , y - 1); }
-                        if (current >= 2 && current <= 4) { revealWall(x - 1, y    ); }
-                        if (current >= 3 && current <= 5) { revealWall(x - 1, y + 1); }
-                        if (current >= 4 && current <= 6) { revealWall(x    , y + 1); }
-                        if (current <= 1 || current >= 5) { revealWall(x + 1, y    ); }
+                        if (current >= 0 && current <= 2) { revealWall(x + 1, y - 1, radius + 1); }
+                        if (current >= 1 && current <= 3) { revealWall(x    , y - 1, radius + 1); }
+                        if (current >= 2 && current <= 4) { revealWall(x - 1, y    , radius + 1); }
+                        if (current >= 3 && current <= 5) { revealWall(x - 1, y + 1, radius + 1); }
+                        if (current >= 4 && current <= 6) { revealWall(x    , y + 1, radius + 1); }
+                        if (current <= 1 || current >= 5) { revealWall(x + 1, y    , radius + 1); }
                     }
                 }
             } else {
@@ -342,9 +340,9 @@ const createLevel = ({
 }) => {
     let last;
     const animTile = (x, y, type, delta = 1) => {
-        last = animationQueue.add({x, y, tile: {
+        last = animationQueue.add({x, y, type: 'setTile', tile: {
             type,
-            visible: false,
+            visible: level[x][y].visible,
             seen: true,
         }}, delta, last);
     };
@@ -384,21 +382,6 @@ const createLevel = ({
     animTile(startx, starty, FLOOR);
     
     // animate border
-    /*forEachTile((x, y) => {
-        if (!inInnerBounds(width, height, x, y)) {
-            if (y === 0 || y === height - 1) {
-                animTile(x, y, WALL);
-            } else {
-                animTile(x, y, WALL);
-            }
-        }
-    });
-    const inBounds = (width, height, x, y) => {
-    return y >= 0 &&
-           y < height &&
-           x >= Math.floor((height - y) / 2) &&
-           x < width - Math.floor(y / 2);
-};*/
     for (let x = Math.floor(height / 2), y = 0; x < width; x++) {
         animTile(x, y, WALL);
     }
@@ -412,6 +395,9 @@ const createLevel = ({
         animTile(x, y, WALL);
     }
 
+    // start animating main algo while border is animating
+    last = animationQueue;
+
     // main algorithm
     const scrambledTiles = [];
     forEachInnerTile((x, y) => {
@@ -424,9 +410,9 @@ const createLevel = ({
         const {x, y} = scrambledTiles[i];
         if (surrounded(x, y, isWall) || countGroups(x, y, isWall) !== 1) {
             level[x][y].type = FLOOR;
-            animTile(x, y, FLOOR);
+            animTile(x, y, FLOOR, i % 6 ? 0 : 1);
         } else if (level[x][y].type === WALL) {
-            animTile(x, y, WALL);
+            animTile(x, y, WALL, i % 6 ? 0 : 1);
         }
     }
 
@@ -617,16 +603,31 @@ const createLevel = ({
         if (tile.type === FLOOR) {
             const transparent = (x, y) => level[x][y].type === FLOOR;
             const reveal = (x, y) => {
+                level[x][y].seen = true;
                 level[x][y].light++;
             };
             fov(x, y, transparent, reveal);
         }
     });
 
+
+    let lastBeforeFov = last;
     // for animation, erase walls with no light value
     forEachTile((x, y) => {
         if (!level[x][y].light) {
-            animTile(x, y, BLANK);
+            if (x > Math.floor((height - y) / 2)) {
+                last = animationQueue.add({x, y, type: 'setTile', tile: {
+                    type: WALL,
+                    visible: false,
+                    seen: false,
+                }}, 0, last);
+            } else {
+                last = animationQueue.add({x, y, type: 'setTile', tile: {
+                    type: WALL,
+                    visible: false,
+                    seen: false,
+                }}, 3, last);
+            }
         }
     });
 
@@ -656,6 +657,28 @@ const createLevel = ({
     player.y = starty;
     level[startx][starty].actor = player;
 
+    animationQueue.add({
+        x: player.x,
+        y: player.y,
+        type: 'createActor',
+        actor: {
+            type: 'player',
+            hp: 100,
+    }}, 1, lastBeforeFov);
+
+    // animate fov
+    {
+        const transparent = (x, y) => level[x][y].type === FLOOR;
+        const reveal = (x, y, radius) => {
+            level[x][y].visible = true;
+            animationQueue.add({x, y, type: 'setTile', tile: {
+                type: level[x][y].type,
+                visible: true,
+                seen: true,
+            }}, 3 * radius + 1, lastBeforeFov);
+        };
+        fov(player.x, player.y, transparent, reveal);
+    }
     return level;
 };
 
@@ -668,8 +691,6 @@ const createGame = ({
     height,
     mainPrng,
     levelPrng,
-    updateTile,
-    updateDraw,
 }) => {
     const game = {};
 
@@ -686,16 +707,7 @@ const createGame = ({
     });
 
     inputMode.push('animating');
-    animateTile();
-
-    /*forEachTile((x, y) => {
-        updateTile(x, y, {
-            type: level[x][y].type,
-            light: level[x][y].light,
-        });
-    });*/
-
-    updateDraw();
+    animate();
 };
 
 // ======== //
@@ -757,11 +769,6 @@ const displayTiles = {
         spritey: 0,
         color: 'hsl(120, 50%, 50%)',
     },
-    BLANK: {
-        spritex: 0,
-        spritey: 0,
-        color: 'transparent',
-    },
     STAIRSDOWN: {
         spritex: 8,
         spritey: 0,
@@ -769,74 +776,90 @@ const displayTiles = {
     },
 };
 
+const displayActors = {
+    player: {
+        spritex: 0,
+        spritey: 1,
+        color: 'hsl(0, 0%, 100%)',
+    },
+};
+
+const cacheTile = (tile) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = XU;
+    canvas.height = TILEHEIGHT;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(tileset, tile.spritex * XU, tile.spritey * TILEHEIGHT, XU, TILEHEIGHT, 0, 0, XU, TILEHEIGHT);
+    ctx.fillStyle = tile.color;
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillRect(0, 0, XU, TILEHEIGHT);
+    tile.canvas = canvas;
+
+    const bgcanvas = document.createElement('canvas');
+    bgcanvas.width = XU;
+    bgcanvas.height = TILEHEIGHT;
+    const bgctx = bgcanvas.getContext('2d');
+    bgctx.drawImage(canvas, 0, 0, XU, TILEHEIGHT);
+    bgctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    bgctx.globalCompositeOperation = 'source-atop';
+    bgctx.fillRect(0, 0, XU, TILEHEIGHT);
+    tile.bgcanvas = bgcanvas;
+};
+
 const cacheTiles = () => {
     for (const TILE in TILES) {
         const displayTile = displayTiles[TILE];
-        const canvas = document.createElement('canvas');
-        canvas.width = XU;
-        canvas.height = TILEHEIGHT;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(tileset, displayTile.spritex * XU, displayTile.spritey * TILEHEIGHT, XU, TILEHEIGHT, 0, 0, XU, TILEHEIGHT);
-        ctx.fillStyle = displayTile.color;
-        ctx.globalCompositeOperation = 'source-in';
-        ctx.fillRect(0, 0, XU, TILEHEIGHT);
-        displayTile.canvas = canvas;
-
-        const bgcanvas = document.createElement('canvas');
-        bgcanvas.width = XU;
-        bgcanvas.height = TILEHEIGHT;
-        const bgctx = bgcanvas.getContext('2d');
-        bgctx.drawImage(canvas, 0, 0, XU, TILEHEIGHT);
-        bgctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        bgctx.globalCompositeOperation = 'source-atop';
-        bgctx.fillRect(0, 0, XU, TILEHEIGHT);
-        displayTile.bgcanvas = bgcanvas;
-
+        cacheTile(displayTile);
         displayTiles[TILES[TILE]] = displayTiles[TILE];
+    }
+    for (const type in displayActors) {
+        const displayActor = displayActors[type];
+        cacheTile(displayActor);
     }
 };
 
-const level = [];
+const displayLevel = [];
 for (let x = 0; x < WIDTH; x++) {
-    level[x] = [];
+    displayLevel[x] = [];
     for (let y = 0; y < HEIGHT; y++) {
-        level[x][y] = { type: WALL };
+        displayLevel[x][y] = {};
     }
 }
 
 const forEachTile = forEachTileOfLevel.bind(null, WIDTH, HEIGHT);
 
 const drawTile = (x, y, {type, seen, visible}) => {
+    if (!seen || displayLevel[x][y].actor) {
+        return;
+    }
     const ctx = ctxs[y];
     const displayTile = displayTiles[type];
     const realx = (x - (HEIGHT - y - 1) / 2) * XU;
     ctx.clearRect(realx, 0, XU, TILEHEIGHT);
-    if (seen) {
-        if (visible) {
-            ctx.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
-        } else {
-            ctx.drawImage(displayTile.bgcanvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
-        }
+    if (visible) {
+        ctx.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
+    } else {
+        ctx.drawImage(displayTile.bgcanvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
     }
 };
 
-const draw = () => {
-    forEachTile((x, y) => {
-        if (level[x][y].light) {
-            const ctx = ctxs[y];
-            const displayTile = displayTiles[level[x][y].type];
-            const realx = (x - (HEIGHT - y - 1) / 2) * XU;
-            ctx.drawImage(displayTile.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
-        }
-    });
+const drawActor = (x, y, {type}) => {
+    const ctx = ctxs[y];
+    const displayActor = displayActors[type];
+    const realx = (x - (HEIGHT - y - 1) / 2) * XU;
+    ctx.clearRect(realx, 0, XU, TILEHEIGHT);
+    ctx.drawImage(displayActor.canvas, 0, 0, XU, TILEHEIGHT, realx, 0, XU, TILEHEIGHT);
 };
 
-// animate level generation animation
+// ========== //
+// #Animation //
+// ========== //
+
 const animationQueue = createSchedule();
 
 const setTickout = (fun, tick) => {
-    if (tick < 2) {
-        requestAnimationFrame(fun);
+    if (tick <= 0) {
+        fun();
     } else {
         requestAnimationFrame(() => {
             setTickout(fun, tick - 1);
@@ -844,35 +867,34 @@ const setTickout = (fun, tick) => {
     }
 };
 
-const animateTile = () => {
+const animate = () => {
     const next = animationQueue.advance();
     if (!next) {
         inputMode.pop();
         return;
     }
-    const {event: {x, y, tile}, delta} = next;
-    drawTile(x, y, tile);
+    let nextFrame;
+    const {event: {x, y, type, tile, actor}, delta} = next;
+    if (type === 'setTile') {
+        nextFrame = () => {
+            for (const key in tile) {
+                displayLevel[x][y][key] = tile[key];
+            }
+            drawTile(x, y, tile);
+            animate();
+        };
+    } else if (type === 'createActor') {
+        nextFrame = () => {
+            displayLevel[x][y].actor = actor;
+            drawActor(x, y, actor);
+            animate();
+        };
+    }
     if (delta && currMode() === 'animating') {
-        setTickout(animateTile, delta);
+        setTickout(nextFrame, delta);
     } else {
-        animateTile();
+        nextFrame();
     }
-};
-
-/*const animatedUpdateTile = (x, y, type, delta = 1, prev = animationQueue) => {
-    const last = animationQueue.add({x, y, type}, delta, prev);
-    return last;
-};*/
-
-const updateTile = (x, y, attributes) => {
-    for (const key in attributes) {
-        level[x][y][key] = attributes[key];
-    }
-};
-
-// Remove this later ;  display should decide to draw when the player actor is updated
-const updateDraw = () => {
-    draw();
 };
 
 let game;
@@ -883,8 +905,6 @@ const startGame = () => {
         height: HEIGHT,
         mainPrng,
         levelPrng,
-        updateTile,
-        updateDraw,
     });
 };
 
