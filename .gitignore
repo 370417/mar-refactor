@@ -2,5 +2,6 @@
 node_modules
 *.xcf
 ideas.txt
-
-build/script.js
+build/display.js
+build/game.js
+build/utility.js
