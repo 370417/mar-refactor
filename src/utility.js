@@ -245,11 +245,19 @@ const createSchedule = () => ({
             prev = next;
             next = next.next;
         }
+        prev.next = {event, delta, next};
         if (next) {
             next.delta -= delta;
+        } else {
+            this.last = prev.next;
         }
-        prev.next = {event, delta, next};
         return prev.next;
+    },
+    // add an event to the schedule delta ticks after the last event
+    append(event, delta = 0) {
+        this.last.next = {event, delta};
+        this.last = this.last.next;
+        return this.last;
     },
     // pop the next next event and return its schedule object
     // {event, delta} = next
@@ -259,6 +267,9 @@ const createSchedule = () => ({
         }
         const next = this.next;
         this.next = this.next.next;
+        if (next === this.last) {
+            this.last === undefined;
+        }
         return next;
     },
 });

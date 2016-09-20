@@ -1,17 +1,141 @@
 const createGame = (() => {
 
+let player;
+let level;
+let width;
+let height;
+let animation;
+let prng;
+let levelPrng;
+
+// the schedule object for the last animation that was added to the animation queue
+let prevAnimation;
+
 //========================================
-//                                   ACTOR
+//                                   TILES
+
+const createTile = (() => {
+    const tiles = {
+        wall: {
+            passable: false,
+            transparent: false,
+            permeable: false,
+        },
+        floor: {
+            passable: true,
+            transparent: true,
+            permeable: true,
+        },
+        stairsDown: {
+            passable: true,
+            transparent: true,
+            permeable: true,
+        }
+    };
+
+    // add explicit types
+    for (const type in tiles) {
+        tiles[type].type = type;
+    }
+
+    return (type) => {
+        return Object.create(tiles[type]);
+    };
+})();
+
+//========================================
+//                                SCHEDULE
+
+const schedule = createSchedule();
+
+const nextMove = () => {
+    const prev = schedule.advance();
+    const {event: actor, delta} = prev;
+    actor.act(delta);
+};
+
+//========================================
+//                                  ACTORS
+
+const act = function(delta) {
+    return this[this.state](delta);
+};
+
+const rest = function() {
+    schedule.add(this, this.delay);
+    nextMove();
+};
+
+const move = function(dx, dy, delta = 0) {
+    if (dx === 0 && dy === 0) {
+        this.rest();
+    }
+    if (level[this.x+dx][this.y+dy].passable) {
+        prevAnimation = animation.moveActor(this.x, this.y, dx, dy, delta, prevAnimation);
+
+        level[this.x][this.y].actor = undefined;
+        this.x += dx;
+        this.y += dy;
+        level[this.x][this.y].actor = this;
+
+        if (this === player) {
+            this.see();
+        }
+
+        schedule.add(this, this.delay);
+        nextMove();
+    } else {
+        // tell display this accidentally bumped something
+    }
+};
+
+const wandering = function(delta) {
+    const validMoves = [];
+    for (const key in directions) {
+        const {dx, dy} = directions[key];
+        if (level[this.x+dx][this.y+dy].passable) {
+            validMoves.push({dx, dy});
+        }
+    }
+    const {dx, dy} = randElement(validMoves, prng);
+    this.move(dx, dy, delta);
+};
 
 // create an actor
 const createActor = (() => {
     const baseActor = {
-        delay: 100,
+        act,
+        move,
+        rest,
+        delay: 24,
     };
 
     const actors = {
         player: {
-
+            state: 'playing',
+            see() {
+                const transparent = (x, y) => level[x][y].transparent;
+                const reveal = (x, y) => {
+                    const tile = level[x][y];
+                    tile.newvisible = true;
+                    tile.seen = true;
+                };
+                fov(this.x, this.y, transparent, reveal);
+                forEachTileOfLevel(width, height, (x, y) => {
+                    const tile = level[x][y];
+                    if (!!tile.newvisible === !tile.visible) {
+                        tile.newvisible = false;
+                        tile.visible = !tile.visible;
+                        animation.queueTile(x, y, level[x][y].type, level[x][y].visible, true, 0, prevAnimation);
+                    }
+                    tile.newvisible = false;
+                });
+            },
+        },
+        wolf: {
+            state: 'wandering',
+            wandering,
+            delay: 12,
         },
     };
 
@@ -25,36 +149,56 @@ const createActor = (() => {
     };
 
     // make all actors inherit from baseActor
-    for (const key in actors) {
-        actors[key].name = key;
-        actors[key] = asActor(actors[key]);
+    for (const type in actors) {
+        actors[type].type = type;
+        actors[type] = asActor(actors[type]);
     }
 
-    return (name) => {
-        const actor = Object.create(actors[name]);
+    return (type, x, y) => {
+        const actor = Object.create(actors[type]);
+        actor.x = x;
+        actor.y = y;
         return actor;
     };
 })();
 
 //========================================
+//                                   INPUT
+
+const input = (action) => {
+    if (action.type === 'move') {
+        const {dx, dy} = action.direction;
+        if (level[player.x+dx][player.y+dy].passable) {
+            player.move(dx, dy);
+        } else {
+            // tell display that player hit something
+        }
+    } else if (action.type === 'rest') {
+        player.rest();
+    } else if (action.type === 'interact') {
+        if (level[player.x][player.y].type === 'stairsDown') {
+            descend();
+        }
+    }
+};
+
+//========================================
 //                                   LEVEL
 
 const createLevel = ({
-    width,
-    height,
     prng,
     startx = 24,
     starty = 15,
-    player,
-    animation,
+    depth = 1,
 }) => {
-    
+
     let last;
     const animTile = (x, y, type, delta = 1) => {
-        last = animation.queueTile(x, y, type, false, delta, last);
+        last = animation.queueTile(x, y, type, false, true, delta, last);
     };
 
     const level = [];
+    level.depth = depth;
 
     for (let x = 0; x < width; x++) {
         level[x] = [];
@@ -293,16 +437,22 @@ const createLevel = ({
             // clear animationQueue so that previous level and this one don't get drawn at the same time
             animation.clearQueue();
             return createLevel({
-                width,
-                height,
                 prng,
                 startx,
                 starty,
-                player,
-                animation,
+                depth,
             });
         }
     }
+
+    // add prototypes to tiles
+    forEachTile((x, y) => {
+        const oldTile = level[x][y];
+        level[x][y] = createTile(oldTile.type);
+        for (const key in oldTile) {
+            level[x][y][key] = oldTile[key];
+        }
+    });
 
     // calculate light values
     forEachTile((x, y) => {
@@ -326,10 +476,8 @@ const createLevel = ({
     forEachTile((x, y) => {
         if (!level[x][y].light) {
             if (x > Math.floor((height - y) / 2)) {
-                //last = animationQueue.add({x, y, type: 'clearTile'}, 0, last);
                 last = animation.clearTile(x, y, 0, last);
             } else {
-                //last = animationQueue.add({x, y, type: 'clearTile'}, 3, last);
                 last = animation.clearTile(x, y, 3, last);
             }
         }
@@ -343,6 +491,13 @@ const createLevel = ({
             level[x][y].type = 'stairsDown';
             animTile(x, y, 'stairsDown');
             placedExit = true;
+
+            const wolf = createActor('wolf', x, y);
+            level[x][y].actor = wolf;
+            animation.createActor(x, y, {
+                type: 'wolf',
+            }, 1, lastBeforeFov);
+            schedule.add(wolf, 0);
         }
     }
     if (!placedExit) {
@@ -364,30 +519,48 @@ const createLevel = ({
     animation.createActor(player.x, player.y, {
         type: 'player',
     }, 1, lastBeforeFov);
-    /*animationQueue.add({
-        x: player.x,
-        y: player.y,
-        type: 'createActor',
-        actor: {
-            type: 'player',
-            hp: 100,
-    }}, 1, lastBeforeFov);*/
 
     // animate fov
     {
-        const transparent = (x, y) => level[x][y].type === 'floor';
+        forEachTile((x, y) => {
+            level[x][y].seen = false;
+        });
+        const transparent = (x, y) => level[x][y].transparent;
         const reveal = (x, y, radius) => {
             level[x][y].visible = true;
-            animation.queueTile(x, y, level[x][y].type, true, 3 * radius + 1, lastBeforeFov);
-            /*animationQueue.add({x, y, type: 'setTile', tile: {
-                type: level[x][y].type,
-                visible: true,
-                seen: true,
-            }}, 3 * radius + 1, lastBeforeFov);*/
+            level[x][y].seen = true;
+            animation.queueTile(x, y, level[x][y].type, true, true, 3 * radius + 1, lastBeforeFov);
         };
         fov(player.x, player.y, transparent, reveal);
     }
+
+    // cancel animation if not first level
+    if (depth > 1) {
+        animation.clearQueue();
+        forEachTile((x, y) => {
+            animation.queueTile(x, y, level[x][y].type, level[x][y].visible, level[x][y].seen);
+            if (level[x][y].actor) {
+                animation.createActor(x, y, {
+                    type: level[x][y].actor.type,
+                });
+            }
+        });
+    }
     return level;
+};
+
+const descend = () => {
+    schedule.next = undefined;
+    schedule.add(player, 0);
+    animation.clearAll();
+    animation.animate();
+    level = createLevel({
+        prng: levelPrng,
+        startx: player.x,
+        starty: player.y,
+        depth: level.depth + 1,
+    });
+    nextMove();
 };
 
 //========================================
@@ -400,31 +573,43 @@ const createLevel = ({
 /// seed {string} determines starting state of prng
 /// queueAnimation {function()} output an animation to the display
 return ({
-    width,
-    height,
+    width: _width,
+    height: _height,
     seed,
-    animation,
+    animation: _animation,
 }) => {
+    width = _width;
+    height = _height;
+    animation = _animation;
+
     // main prng used for combat and ai
     const mainPrng = new Math.seedrandom(seed);
+    prng = mainPrng;
 
     // prng used for all level generation
-    const levelPrng = new Math.seedrandom(seed);
+    levelPrng = new Math.seedrandom(seed);
 
     // create player
-    const player = createActor('player');
+    player = createActor('player');
+    // let the player launch animation on its turn
+    player.playing = function() {
+        prevAnimation = undefined;
+        animation.animate();
+    };
+    schedule.add(player, 0);
 
     // generate first level
-    let level = createLevel({
-        width,
-        height,
+    level = createLevel({
         prng: levelPrng,
-        player,
-        animation,
     });
 
+    // begin game
+    nextMove();
+
     // replace this with starting the player's first turn
-    animation.animate();
+    //animation.animate();
+
+    return input;
 };
 
 })();

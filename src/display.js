@@ -22,7 +22,7 @@ const ctxs = [];
 const bgctxs = [];
 for (let i = 0; i < height; i++) {
     const canvas = document.createElement('canvas');
-    canvas.width = (width - height / 2 + 1)* xu;
+    canvas.width = (width - height / 2 + 1) * xu;
     canvas.height = yu;
     canvas.style.top = i * (yu - overlap) + 'px';
     const ctx = canvas.getContext('2d');
@@ -72,6 +72,11 @@ const Tiles = {
         spritey: 1,
         color: 'hsl(0, 0%, 100%)',
     },
+    wolf: {
+        spritex: 0,
+        spritey: 2,
+        color: 'white',
+    },
 };
 
 // create cached canvases for a tile
@@ -113,27 +118,33 @@ const clearTile = (x, y) => {
     ctx.clearRect(realx, 0, xu, yu);
 };
 
-const drawTile = (x, y, {type, seen, visible}) => {
-    if (!seen || level[x][y].actor) {
-        return;
-    }
-    const ctx = ctxs[y];
-    const tile = Tiles[type];
-    const realx = (x - (height - y - 1) / 2) * xu;
-    ctx.clearRect(realx, 0, xu, yu);
-    if (visible) {
-        ctx.drawImage(tile.canvas, 0, 0, xu, yu, realx, 0, xu, yu);
-    } else {
-        ctx.drawImage(tile.bgcanvas, 0, 0, xu, yu, realx, 0, xu, yu);
+const clearAll = () => {
+
+    for (let y = 0; y < height; y++) {console.log(y);
+        const ctx = ctxs[y];
+        ctx.clearRect(0, 0, (width - height / 2 + 1) * xu, yu);
     }
 };
 
-const drawActor = (x, y, {type}) => {
+const drawTile = (x, y, clear = true) => {
+    const tile = level[x][y];
+    if (!tile.seen) {
+        return;
+    }
     const ctx = ctxs[y];
-    const actor = Tiles[type];
     const realx = (x - (height - y - 1) / 2) * xu;
-    ctx.clearRect(realx, 0, xu, yu);
-    ctx.drawImage(actor.canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+    if (clear) {
+        ctx.clearRect(realx, 0, xu, yu);
+    }
+    if (tile.visible) {
+        if (tile.actor) {
+            ctx.drawImage(Tiles[tile.actor.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+        } else {
+            ctx.drawImage(Tiles[tile.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+        }
+    } else {
+        ctx.drawImage(Tiles[tile.type].bgcanvas, 0, 0, xu, yu, realx, 0, xu, yu);
+    }
 };
 
 //========================================
@@ -167,17 +178,23 @@ const animate = () => {
     const next = animationQueue.advance();
     if (!next) {
         inputMode.pop();
+        while (currMode() === 'playing' && keyBuffer.length) {
+            keydown({code: keyBuffer.shift()});
+        }
         return;
     }
     let nextFrame;
-    const {event: {x, y, type, tileType, visible, actor}, delta} = next;
+    const {event: {x, y, dx, dy, type, tileType, visible, seen, actor}, delta} = next;
     if (type === 'setTile') {
         nextFrame = () => {
-            drawTile(x, y, {
-                type: tileType,
-                visible,
-                seen: true,
-            });
+            let clear = true;
+            if (level[x][y].type === tileType) {
+                clear = false;
+            }
+            level[x][y].type = tileType;
+            level[x][y].visible = visible;
+            level[x][y].seen = seen;
+            drawTile(x, y, clear);
             animate();
         };
     } else if (type === 'clearTile') {
@@ -186,15 +203,33 @@ const animate = () => {
             clearTile(x, y);
             animate();
         };
+    } else if (type === 'clearAll') {
+        nextFrame = () => {
+            forEachTileOfLevel(width, height, (x, y) => {
+                level[x][y] = {};
+            });
+            clearAll();
+            animate();
+        };
     } else if (type === 'createActor') {
         nextFrame = () => {
             level[x][y].actor = actor;
-            drawActor(x, y, actor);
+            drawTile(x, y);
+            animate();
+        };
+    } else if (type === 'moveActor') {
+        nextFrame = () => {
+            const actor = level[x][y].actor;
+            level[x][y].actor = undefined;
+            const x2 = x + dx;
+            const y2 = y + dy;
+            level[x2][y2].actor = actor;
+            drawTile(x, y);
+            drawTile(x2, y2);
             animate();
         };
     }
     if (delta && currMode() === 'animating') {
-        console.log(delta);
         setTickout(nextFrame, delta);
     } else {
         nextFrame();
@@ -205,19 +240,21 @@ const animation = {
     // clear animation queue
     clearQueue() {
         animationQueue.next = undefined;
+        animationQueue.last = undefined;
     },
     // schedule an animation
     queue(animation, delay, prev) {
         return animationQueue.add(animation, delay, prev);
     },
     // schedule a tile animation event
-    queueTile(x, y, tileType, visible, delay, prev) {
+    queueTile(x, y, tileType, visible, seen, delay, prev) {
         return animationQueue.add({
             type: 'setTile',
             x,
             y,
             tileType,
             visible,
+            seen,
         }, delay, prev);
     },
     // clear a tile
@@ -228,6 +265,12 @@ const animation = {
             y,
         }, delay, prev);
     },
+    // clear the display
+    clearAll(delay, prev) {
+        return animationQueue.add({
+            type: 'clearAll',
+        }, delay, prev);
+    },
     createActor(x, y, actor, delay, prev) {
         return animationQueue.add({
             type: 'createActor',
@@ -236,9 +279,22 @@ const animation = {
             actor,
         }, delay, prev);
     },
+    moveActor(x, y, dx, dy, delay, prev) {
+        return animationQueue.add({
+            type: 'moveActor',
+            x,
+            y,
+            dx,
+            dy,
+        }, delay, prev);
+    },
     animate() {
-        if (currMode() !== 'animating') {
-            inputMode.push('animating');
+        if (currMode() === 'playing') {
+            if (keyBuffer.length) {
+                inputMode.push('skipping');
+            } else {
+                inputMode.push('animating');
+            }
         }
         animate();
     },
@@ -247,7 +303,10 @@ const animation = {
 //========================================
 //                                   INPUT
 
+let input;
+
 const keyCode2code = {
+    '13': 'Enter',
     '27': 'Escape',
     '32': 'Space',
     '37': 'ArrowLeft',
@@ -282,18 +341,50 @@ const keyCode2code = {
     '90': 'KeyZ',
 };
 
+const code2direction = {
+    KeyW: DIR11,
+    KeyE: DIR1,
+    KeyA: DIR9,
+    KeyD: DIR3,
+    KeyZ: DIR7,
+    KeyX: DIR5,
+};
+
 // stack of modes for input
 const inputMode = ['playing'];
 const currMode = () => inputMode[inputMode.length-1];
+
+// buffer for keys pressed while animating
+const keyBuffer = [];
 
 // handles keydown for each mode
 const modalKeydown = {
     animating: (code) => {
         // skip animation
         inputMode[inputMode.length-1] = 'skipping';
+        // make sure keypress is processed
+        keyBuffer.push(code);
+    },
+    skipping: (code) => {
+        // make sure keypress is processed
+        keyBuffer.push(code);
     },
     playing: (code) => {
-        
+        if (code2direction[code]) {
+            input({
+                type: 'move',
+                direction: code2direction[code],
+            });
+        } else if (code === 'KeyS') {
+            input({
+                type: 'rest',
+            });
+        }
+        if (code === 'Enter' || code === 'Space') {
+            input({
+                type: 'interact',
+            });
+        }
     },
 };
 
@@ -307,10 +398,10 @@ const keydown = (e) => {
 //                              START GAME
 
 const startGame = () => {
-    const seed = 1474169198547 || Date.now();
+    const seed = Date.now();
     console.log(seed);
     cacheTiles();
-    createGame({
+    input = createGame({
         width, 
         height,
         seed,
