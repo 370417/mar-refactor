@@ -77,6 +77,21 @@ const Tiles = {
         spritey: 2,
         color: 'white',
     },
+    tripwire1_7: {
+        spritex: 2,
+        spritey: 3,
+        color: 'white',
+    },
+    tripwire3_9: {
+        spritex: 0,
+        spritey: 3,
+        color: 'white',
+    },
+    tripwire5_11: {
+        spritex: 1,
+        spritey: 3,
+        color: 'white',
+    },
 };
 
 // create cached canvases for a tile
@@ -136,9 +151,12 @@ const drawTile = (x, y, clear = true) => {
     if (clear) {
         ctx.clearRect(realx, 0, xu, yu);
     }
+    if (tile.actor) {
+            ctx.drawImage(Tiles[tile.actor.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+        }
     if (tile.visible) {
         if (tile.actor) {
-            ctx.drawImage(Tiles[tile.actor.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+            //ctx.drawImage(Tiles[tile.actor.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
         } else {
             ctx.drawImage(Tiles[tile.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
         }
@@ -398,7 +416,7 @@ const keydown = (e) => {
 //                              START GAME
 
 const startGame = () => {
-    const seed = Date.now();
+    const seed =  Date.now();
     console.log(seed);
     cacheTiles();
     input = createGame({

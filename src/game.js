@@ -20,17 +20,38 @@ const createTile = (() => {
             passable: false,
             transparent: false,
             permeable: false,
+            cost: Infinity,
         },
         floor: {
             passable: true,
             transparent: true,
             permeable: true,
+            cost: 1,
         },
         stairsDown: {
             passable: true,
             transparent: true,
             permeable: true,
-        }
+            cost: 1,
+        },
+        tripwire1_7: {
+            passable: true,
+            transparent: true,
+            permeable: true,
+            cost: Infinity,
+        },
+        tripwire3_9: {
+            passable: true,
+            transparent: true,
+            permeable: true,
+            cost: Infinity,
+        },
+        tripwire5_11: {
+            passable: true,
+            transparent: true,
+            permeable: true,
+            cost: Infinity,
+        },
     };
 
     // add explicit types
@@ -78,6 +99,8 @@ const move = function(dx, dy, delta = 0) {
         this.y += dy;
         level[this.x][this.y].actor = this;
 
+        this.lastMove = {dx, dy};
+
         if (this === player) {
             this.see();
         }
@@ -89,23 +112,12 @@ const move = function(dx, dy, delta = 0) {
     }
 };
 
-const wandering = function(delta) {
-    const validMoves = [];
-    for (const key in directions) {
-        const {dx, dy} = directions[key];
-        if (level[this.x+dx][this.y+dy].passable) {
-            validMoves.push({dx, dy});
-        }
-    }
-    const {dx, dy} = randElement(validMoves, prng);
-    this.move(dx, dy, delta);
-};
-
 // create an actor
 const createActor = (() => {
     const baseActor = {
         act,
         move,
+        lastMove: { dx: 0, dy: 0 },
         rest,
         delay: 24,
     };
@@ -131,11 +143,6 @@ const createActor = (() => {
                     tile.newvisible = false;
                 });
             },
-        },
-        wolf: {
-            state: 'wandering',
-            wandering,
-            delay: 12,
         },
     };
 
@@ -199,6 +206,8 @@ const createLevel = ({
 
     const level = [];
     level.depth = depth;
+    level.width = width;
+    level.height = height;
 
     for (let x = 0; x < width; x++) {
         level[x] = [];
@@ -390,8 +399,23 @@ const createLevel = ({
             if (level[x][y].cave === true) {
                 const cave = {
                     tiles: [],
+                    exits: [],
                 };
-                const passable = (x, y) => level[x][y].cave === true;
+                const hasExit = (x, y) => {
+                    for (let i = 0; i < cave.exits.length; i++) {
+                        const exit = cave.exits[i];
+                        if (x === exit.x && y === exit.y) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+                const passable = (x, y) => {
+                    if (level[x][y].type === 'floor' && !level[x][y].cave && !hasExit(x, y)) {
+                        cave.exits.push({x, y});
+                    }
+                    return level[x][y].cave === true;
+                }
                 const callback = (x, y) => {
                     cave.tiles.push({x, y});
                     level[x][y].cave = cave;
@@ -491,13 +515,6 @@ const createLevel = ({
             level[x][y].type = 'stairsDown';
             animTile(x, y, 'stairsDown');
             placedExit = true;
-
-            const wolf = createActor('wolf', x, y);
-            level[x][y].actor = wolf;
-            animation.createActor(x, y, {
-                type: 'wolf',
-            }, 1, lastBeforeFov);
-            schedule.add(wolf, 0);
         }
     }
     if (!placedExit) {
@@ -515,6 +532,9 @@ const createLevel = ({
     player.x = startx;
     player.y = starty;
     level[startx][starty].actor = player;
+    if (level[player.x][player.y].cave) {
+        level[player.x][player.y].cave.type = 'entrance';
+    }
 
     animation.createActor(player.x, player.y, {
         type: 'player',
@@ -533,6 +553,104 @@ const createLevel = ({
         };
         fov(player.x, player.y, transparent, reveal);
     }
+
+    // change a tile's type
+    const setTileType = (x, y, type) => {
+        const oldTile = level[x][y];
+        const newTile = createTile(type);
+        newTile.actor = oldTile.actor;
+        newTile.light = oldTile.light;
+        newTile.cave = oldTile.cave;
+        level[x][y] = newTile;
+        return newTile;
+    };
+
+    // decorate caves
+    const caveTypes = {
+        tripwire: {
+            weight(cave) {
+                let centerx, centery;
+                let maxlight = 0;
+                cave.tiles.forEach(({x, y}) => {
+                    if (level[x][y].light > maxlight && surrounded(x, y, (x, y) => level[x][y].passable)) {
+                        centerx = x;
+                        centery = y;
+                        maxlight = level[x][y];
+                    }
+                });
+
+                if (centerx === undefined || cave.tiles.size > 30 || cave.tiles.size < 10 || cave.exits.length > 1) {
+                    return 0;
+                }
+                return 1;
+            },
+            generate(cave) {
+                let centerx, centery;
+                let maxlight = 0;
+                cave.tiles.forEach(({x, y}) => {
+                    if (level[x][y].light > maxlight && surrounded(x, y, (x, y) => level[x][y].passable)) {
+                        centerx = x;
+                        centery = y;
+                        maxlight = level[x][y];
+                    }
+                });
+
+                if (centerx === undefined) {
+                    return;
+                }
+
+                const countTile = (x, y, dir) => {
+                    if (level[x][y].passable) {
+                        if (level[x][y].cave) {
+                            return 1 + countTile(x + dir.dx, y + dir.dy, dir);
+                        } else {
+                            return 100 + countTile(x + dir.dx, y + dir.dy, dir);
+                        }
+                    } else {
+                        return 0;
+                    }
+                };
+
+                const dir1_7 = countTile(centerx, centery, DIR1) + countTile(centerx, centery, DIR7);
+                const dir3_9 = countTile(centerx, centery, DIR3) + countTile(centerx, centery, DIR9);
+                const dir5_11 = countTile(centerx, centery, DIR5) + countTile(centerx, centery, DIR11);
+
+                const placeWire = (x, y, dir, type) => {
+                    if (level[x][y].passable) {
+                        setTileType(x, y, type);
+                        placeWire(x + dir.dx, y + dir.dy, dir, type);
+                    }
+                };
+
+                if (dir3_9 <= dir1_7 && dir3_9 <= dir5_11) {
+                    placeWire(centerx, centery, DIR3, 'tripwire3_9');
+                    placeWire(centerx, centery, DIR9, 'tripwire3_9');
+                } else if (dir1_7 <= dir5_11) {
+                    placeWire(centerx, centery, DIR1, 'tripwire1_7');
+                    placeWire(centerx, centery, DIR7, 'tripwire1_7');
+                } else {
+                    placeWire(centerx, centery, DIR5, 'tripwire5_11');
+                    placeWire(centerx, centery, DIR11, 'tripwire5_11');
+                }
+            },
+        },
+    };
+    forEachInnerTile((x, y) => {
+        const cave = level[x][y].cave;
+        if (cave && !cave.type) {
+            const possibleTypes = [];
+            for (const type in caveTypes) {
+                for (let i = caveTypes[type].weight(cave); i > 0; i--) {
+                    possibleTypes.push(type);
+                }
+            }
+            if (possibleTypes.length) {
+                const type = randElement(possibleTypes, prng);
+                cave.type = type;
+                caveTypes[type].generate(cave);
+            }
+        }
+    });
 
     // cancel animation if not first level
     if (depth > 1) {

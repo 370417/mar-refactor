@@ -133,6 +133,32 @@ const fov = (() => {
 })();
 
 //========================================
+//                             PATHFINDING
+
+// Calculate an influence map (aka flow map/Dijkstra map)
+// this funtion assumes that nodes have their distance set already, noromally end nodes to 0 and all others to Infinity
+const influenceMap = (nodes, forEachNeighbor, getDistance, setDistance, getCost, getVisited, setVisited) => {
+    const unvisited = new Heap((a, b) => getDistance(a) - getDistance(b));
+
+    nodes.forEach((node) => {
+        unvisited.push(node);
+    });
+
+    while (!unvisited.empty()) {
+        const node = unvisited.pop();
+        setVisited(node, true);
+
+        forEachNeighbor(node, (neighbor) => {
+            const altDistance = getDistance(node) + getCost(neighbor);
+            if (!getVisited(neighbor) && altDistance < getDistance(neighbor)) {
+                setDistance(neighbor, altDistance);
+                unvisited.updateItem(neighbor);
+            }
+        });
+    }
+};
+
+//========================================
 //                                     RNG
 
 // generate a random integer in the interval [min, max]
