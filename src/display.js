@@ -135,7 +135,7 @@ const clearTile = (x, y) => {
 
 const clearAll = () => {
 
-    for (let y = 0; y < height; y++) {console.log(y);
+    for (let y = 0; y < height; y++) {
         const ctx = ctxs[y];
         ctx.clearRect(0, 0, (width - height / 2 + 1) * xu, yu);
     }
@@ -177,18 +177,27 @@ for (let x = 0; x < width; x++) {
     }
 }
 
+const animationQueue = createSchedule();
+let timeout;
+let timeoutFunction;
+
 // call fun() after tick number of ticks
 const setTickout = (fun, tick) => {
     if (tick <= 0) {
         fun();
     } else {
-        requestAnimationFrame(() => {
+        timeoutFunction = fun;
+        timeout = requestAnimationFrame(() => {
             setTickout(fun, tick - 1);
         });
     }
 };
 
-const animationQueue = createSchedule();
+const clearTickout = () => {
+    cancelAnimationFrame(timeout);
+    timeoutFunction();
+    timeoutFuntion = undefined;
+};
 
 // animate one frame
 const animate = () => {
@@ -244,6 +253,10 @@ const animate = () => {
             level[x2][y2].actor = actor;
             drawTile(x, y);
             drawTile(x2, y2);
+            animate();
+        };
+    } else if (type === 'wait') {
+        nextFrame = () => {
             animate();
         };
     }
@@ -304,6 +317,11 @@ const animation = {
             y,
             dx,
             dy,
+        }, delay, prev);
+    },
+    wait(delay, prev) {
+        return animationQueue.add({
+            type: 'wait',
         }, delay, prev);
     },
     animate() {
@@ -382,6 +400,7 @@ const modalKeydown = {
         inputMode[inputMode.length-1] = 'skipping';
         // make sure keypress is processed
         keyBuffer.push(code);
+        clearTickout();
     },
     skipping: (code) => {
         // make sure keypress is processed

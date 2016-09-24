@@ -82,14 +82,16 @@ const act = function(delta) {
     return this[this.state](delta);
 };
 
-const rest = function() {
+const rest = function(delta) {
+    prevAnimation = animation.wait(delta, prevAnimation);
+
     schedule.add(this, this.delay);
     nextMove();
 };
 
 const move = function(dx, dy, delta = 0) {
     if (dx === 0 && dy === 0) {
-        this.rest();
+        this.rest(delta);
     }
     if (level[this.x+dx][this.y+dy].passable) {
         prevAnimation = animation.moveActor(this.x, this.y, dx, dy, delta, prevAnimation);
@@ -109,6 +111,23 @@ const move = function(dx, dy, delta = 0) {
         nextMove();
     } else {
         // tell display this accidentally bumped something
+    }
+};
+
+const wandering = function(delta) {
+    const moves = [];
+    for (const key in directions) {
+        const {dx, dy} = directions[key];
+        const tile = level[this.x+dx][this.y+dy];
+        if (tile.passable && !tile.actor) {
+            moves.push({dx, dy});
+        }
+    }
+    if (moves.length) {
+        const {dx, dy} = randElement(moves, prng);
+        this.move(dx, dy, delta);
+    } else {
+        this.rest(delta);
     }
 };
 
@@ -143,6 +162,11 @@ const createActor = (() => {
                     tile.newvisible = false;
                 });
             },
+        },
+        wolf: {
+            state: 'wandering',
+            wandering,
+            delay: 12,
         },
     };
 
@@ -513,6 +537,7 @@ const createLevel = ({
         const {x, y} = scrambledTiles[i];
         if (!placedExit && level[x][y].cave && level[x][y].type === 'floor' && level[x][y].cave.tiles.length <= 12) {
             level[x][y].type = 'stairsDown';
+            level[x][y].cave.type = 'exit';
             animTile(x, y, 'stairsDown');
             placedExit = true;
         }
@@ -579,7 +604,7 @@ const createLevel = ({
                     }
                 });
 
-                if (centerx === undefined || cave.tiles.size > 30 || cave.tiles.size < 10 || cave.exits.length > 1) {
+                if (centerx === undefined || cave.exits.length > 1) {
                     return 0;
                 }
                 return 1;
@@ -632,6 +657,23 @@ const createLevel = ({
                     placeWire(centerx, centery, DIR5, 'tripwire5_11');
                     placeWire(centerx, centery, DIR11, 'tripwire5_11');
                 }
+            },
+        },
+        wolf: {
+            weight(cave) {
+                if (cave.exits.length > 1) {
+                    return 1;
+                }
+                return 0;
+            },
+            generate(cave) {
+                const {x, y} = randElement(cave.tiles, prng);
+                const wolf = createActor('wolf', x, y);
+                level[x][y].actor = wolf;
+                schedule.add(wolf);
+                animation.createActor(x, y, {
+                    type: 'wolf',
+                }, 1, lastBeforeFov);
             },
         },
     };
@@ -723,9 +765,6 @@ return ({
 
     // begin game
     nextMove();
-
-    // replace this with starting the player's first turn
-    //animation.animate();
 
     return input;
 };
