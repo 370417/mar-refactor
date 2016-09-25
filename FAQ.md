@@ -1,11 +1,30 @@
 # FAQ Friday questions
 
-[\#1: Languages and Libaries](#1-languages-and-libraries)  
-[#2: ]
+[1: Languages and Libaries](#1-languages-and-libraries)  
+[2: Development Tools](#2-development-tools)  
+[3: The Game Loop](#3-the-game-loop)  
+[12: Field of Vision](#12-field-of-vision)  
 
 ## 1: Languages and Libraries
 
 > What languages and libraries are you using to build your current roguelike? Why did you choose them? How have they been particularly useful, or not so useful?
+
+Many a Rogue is written in Javascript.  
+Pros:
+
+* I had prior experience with the language
+* Cross-platform and install-free
+* Lots of freedom, with dynamic typing, prototypical inheritance, and first-class functions
+* Fast development cycle
+* I write js es6, the new standard for javascript, and transpile it to es5, the widely-supported standard, using Babel
+* Easy UI with HTML/CSS
+
+Cons:
+
+* Client-side, can't prevent cheating
+* Lots of freedom, with dynamic typing, prototypical inheritance, and first-class functions
+* It takes time (only 5 seconds or so) to transpile my code
+* Not as fast as other languages
 
 ## 2: Development Tools
 
@@ -50,6 +69,10 @@
 ## 12: Field of Vision
 
 > What FOV algorithm do you use, and why? Does it have any drawbacks or particularly useful characteristics? Does it have bidirectional symmetry? Is it fast? How did you come up with it?
+
+I use recursive shadowcasting. It's fast, efficient, and elegant. To quickly summarize how the algorithm works, it casts arcs of light at increasing ranges, recursively splitting into smaller arcs when it encounters obstables. I think it's just about a perfect algorithm for rectangular grids, where you can sweep octants, and everything is generally understandable. However, Many a Rogue uses a hex grid, so I use a radial variant that sweeps out arcs instead of lines. Hexagon math is a bit complicated, so I pretend that walls are diamonds that point towards the origin. That means that, unlike the rectangular version^1, the hex version of recursive shadowcasting lacks bidirectional symmetry.
+
+
 
 ## 13: Geometry
 
