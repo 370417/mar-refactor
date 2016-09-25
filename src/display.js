@@ -151,12 +151,9 @@ const drawTile = (x, y, clear = true) => {
     if (clear) {
         ctx.clearRect(realx, 0, xu, yu);
     }
-    if (tile.actor) {
-            ctx.drawImage(Tiles[tile.actor.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
-        }
     if (tile.visible) {
         if (tile.actor) {
-            //ctx.drawImage(Tiles[tile.actor.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+            ctx.drawImage(Tiles[tile.actor.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
         } else {
             ctx.drawImage(Tiles[tile.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
         }
