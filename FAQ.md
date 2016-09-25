@@ -1,5 +1,8 @@
 # FAQ Friday questions
 
+[\#1: Languages and Libaries](#1-languages-and-libraries)  
+[#2: ]
+
 ## 1: Languages and Libraries
 
 > What languages and libraries are you using to build your current roguelike? Why did you choose them? How have they been particularly useful, or not so useful?
