@@ -4,6 +4,10 @@
 [2: Development Tools](#2-development-tools)  
 [3: The Game Loop](#3-the-game-loop)  
 [12: Field of Vision](#12-field-of-vision)  
+[13: Geometry](#13-geometry)  
+[14: Inspiration](#14-inspiration)  
+[36: Character Progression](#36-character-progression)  
+[45: Lanugages Redux](#45-languages-redux)  
 
 ## 1: Languages and Libraries
 
@@ -70,17 +74,25 @@ Cons:
 
 > What FOV algorithm do you use, and why? Does it have any drawbacks or particularly useful characteristics? Does it have bidirectional symmetry? Is it fast? How did you come up with it?
 
-I use recursive shadowcasting. It's fast, efficient, and elegant. To quickly summarize how the algorithm works, it casts arcs of light at increasing ranges, recursively splitting into smaller arcs when it encounters obstables. I think it's just about a perfect algorithm for rectangular grids, where you can sweep octants, and everything is generally understandable. However, Many a Rogue uses a hex grid, so I use a radial variant that sweeps out arcs instead of lines. Hexagon math is a bit complicated, so I pretend that walls are diamonds that point towards the origin. That means that, unlike the rectangular version^1, the hex version of recursive shadowcasting lacks bidirectional symmetry.
+I use recursive shadowcasting. It's fast, efficient, and elegant. To quickly summarize how the algorithm works, it casts arcs of light at increasing ranges, recursively splitting into smaller arcs when it encounters obstables. I think it's just about a perfect algorithm for rectangular grids, where you can sweep octants, and everything is generally understandable. However, Many a Rogue uses a hex grid, so I use a radial variant that sweeps out arcs instead of lines. Hexagon math is a bit complicated, so I pretend that walls are diamonds that point towards the origin. That means that, unlike the rectangular version, the hex version of recursive shadowcasting lacks bidirectional symmetry.
 
-
+n.b. The simplest version of recursive shadowcasting does not have bidirectional symmetry. All you need to do to ensure symmetry is to only light tiles whose *centers* lie in the lit area.
 
 ## 13: Geometry
 
 > Does it use continuous space? Does it use hexes, squares, or something else? If square, is movement Chebyshev, Euclidean, or Taxicab? Same question for line of sight and effects with limited range.
 
+Many a Rogue uses a hex grid. This works well because the game takes place in caves, and hexes tend to shine when representing natural formations as opposed to artificial structures. Hexes are also very nice because you no longer have to deal with diagonals or any sort of varying movement costs. The challenges of using hexes are that it is less intuitive, and its more difficult to display the grid. Games like Cogmind and Pyromancer subdivide the main grid for particle effects, which is still possible but less symmetric if using hexes. There's also less free assests floating around for hex games, but I talk more about that in the [map object representation](#28-map-object-representation) question.
+
 ## 14: Inspiration
 
 > What are sources of inspiration for your project(s)? Movies? Books? History? Other games? Other people? Anything, really...
+
+* My favorite game, a little flash game called Sonny 2
+* Two other flash games, Starfighter: Disputed Galaxy and Realm of the Mad God
+* The roguelikes I play semi-frequently: Rogue, Brogue, and Sil
+* /r/roguelikedev
+* More that doesn't come to mind right now
 
 ## 15: AI
 
@@ -131,6 +143,8 @@ I use recursive shadowcasting. It's fast, efficient, and elegant. To quickly sum
 > Do you use animations to show the results of an attack? Attacks themselves? (Especially those at range.) Movement? Other elements?
 Describe your animation system's architecture. How are animations associated with an action? How do you work within the limitations of ASCII/2D grids? Any "clever hacks"?
 
+
+
 ## 27: Color
 
 > Is color particularly important to your roguelike? What colors do you use, and how? How did you determine your color scheme?
@@ -171,6 +185,10 @@ Describe your animation system's architecture. How are animations associated wit
 
 > How do you enable character progress? An XP system? Some other form of leveling? Purely equipment-based? A combination of skills and items?
 
+Skills
+
+Items
+
 ## 37: Hunger Clocks
 
 > What form of hunger clock do you use in your roguelike? How does the player interact with it? What other systems tie into it? Or maybe you don't use a hunger clock at all? Why?
@@ -205,7 +223,7 @@ Describe your animation system's architecture. How are animations associated wit
 
 ## 45: Libraries Redux
 
-See question 1.
+See [question 1](#1-languages-and-libraries).
 
 ## 46: Optimization
 

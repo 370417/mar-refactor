@@ -1,5 +1,7 @@
 {
 
+let player = {};
+
 //========================================
 //                           HTML ELEMENTS
 
@@ -46,11 +48,13 @@ for (let i = 0; i < height; i++) {
 
 const tileset = document.createElement('img');
 
+const wallColor = 'hsl(40, 10%, 75%)'
+
 const Tiles = {
     wall: {
         spritex: 0,
         spritey: 0,
-        color: 'hsl(40, 10%, 75%)',
+        color: wallColor,
     },
     floor: {
         spritex: 1,
@@ -72,10 +76,10 @@ const Tiles = {
         spritey: 1,
         color: 'hsl(0, 0%, 100%)',
     },
-    wolf: {
-        spritex: 0,
+    snake: {
+        spritex: 2,
         spritey: 2,
-        color: 'white',
+        color: 'hsl(40, 100%, 80%)',
     },
     tripwire1_7: {
         spritex: 2,
@@ -89,6 +93,26 @@ const Tiles = {
     },
     tripwire5_11: {
         spritex: 1,
+        spritey: 3,
+        color: 'white',
+    },
+    pillar: {
+        spritex: 5,
+        spritey: 0,
+        color: wallColor,
+    },
+    crackedPillar: {
+        spritex: 6,
+        spritey: 0,
+        color: wallColor,
+    },
+    brokenPillar: {
+        spritex: 7,
+        spritey: 0,
+        color: wallColor,
+    },
+    reticle: {
+        spritex: 3,
         spritey: 3,
         color: 'white',
     },
@@ -162,6 +186,12 @@ const drawTile = (x, y, clear = true) => {
     }
 };
 
+const drawReticle = (x, y) => {
+    const ctx = ctxs[y];
+    const realx = (x - (height - y - 1) / 2) * xu;
+    ctx.drawImage(Tiles.reticle.canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+};
+
 //========================================
 //                               ANIMATION
 
@@ -193,7 +223,7 @@ const setTickout = (fun, tick) => {
 const clearTickout = () => {
     cancelAnimationFrame(timeout);
     timeoutFunction();
-    timeoutFuntion = undefined;
+    timeoutFunction = undefined;
 };
 
 // animate one frame
@@ -238,6 +268,10 @@ const animate = () => {
     } else if (type === 'createActor') {
         nextFrame = () => {
             level[x][y].actor = actor;
+            if (actor.type === 'player') {
+                player.x = x;
+                player.y = y;
+            }
             drawTile(x, y);
             animate();
         };
@@ -248,6 +282,10 @@ const animate = () => {
             const x2 = x + dx;
             const y2 = y + dy;
             level[x2][y2].actor = actor;
+            if (actor.type === 'player') {
+                player.x = x2;
+                player.y = y2;
+            }
             drawTile(x, y);
             drawTile(x2, y2);
             animate();
@@ -321,6 +359,16 @@ const animation = {
             type: 'wait',
         }, delay, prev);
     },
+    fire(projectile, ox, oy, x, y, delay, prev) {
+        return animationQueue.add({
+            type: projectile,
+            ox,
+            oy,
+            x,
+            y,
+            actor: level[x][y].actor,
+        }, delay, prev);
+    },
     animate() {
         if (currMode() === 'playing') {
             if (keyBuffer.length) {
@@ -331,6 +379,23 @@ const animation = {
         }
         animate();
     },
+};
+
+//========================================
+//                                  RANGED
+
+// reticle coordinates
+let reticlex = -1;
+let reticley = -1;
+
+const moveReticle = (x, y) => {
+    reticlex = x;
+    reticley = y;
+    clearAll();
+    forEachTileOfLevel(width, height, (x, y) => {
+        drawTile(x, y, false);
+    });
+    drawReticle(x, y);
 };
 
 //========================================
@@ -413,11 +478,20 @@ const modalKeydown = {
             input({
                 type: 'rest',
             });
+        } else if (code === 'KeyF') {
+            moveReticle(player.x, player.y);
+            inputMode.push('aiming');
         }
         if (code === 'Enter' || code === 'Space') {
             input({
                 type: 'interact',
             });
+        }
+    },
+    aiming: (code) => {
+        if (code2direction[code]) {
+            const {dx, dy} = code2direction[code];
+            moveReticle(reticlex + dx, reticley + dy);
         }
     },
 };

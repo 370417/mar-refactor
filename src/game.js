@@ -52,6 +52,24 @@ const createTile = (() => {
             permeable: true,
             cost: Infinity,
         },
+        pillar: {
+            passable: false,
+            transparent: false,
+            permeable: true,
+            cost: Infinity,
+        },
+        crackedPillar: {
+            passable: false,
+            transparent: false,
+            permeable: true,
+            cost: Infinity,
+        },
+        brokenPillar: {
+            passable: false,
+            transparent: true,
+            permeable: true,
+            cost: Infinity,
+        },
     };
 
     // add explicit types
@@ -163,10 +181,9 @@ const createActor = (() => {
                 });
             },
         },
-        wolf: {
+        snake: {
             state: 'wandering',
             wandering,
-            delay: 12,
         },
     };
 
@@ -659,21 +676,49 @@ const createLevel = ({
                 }
             },
         },
-        wolf: {
+        pillar: {
             weight(cave) {
-                if (cave.exits.length > 1) {
+                if (cave.exits.length > 1 && cave.tiles.length > 18) {
                     return 1;
                 }
                 return 0;
             },
             generate(cave) {
-                const {x, y} = randElement(cave.tiles, prng);
+                /*const {x, y} = randElement(cave.tiles, prng);
                 const wolf = createActor('wolf', x, y);
                 level[x][y].actor = wolf;
                 schedule.add(wolf);
                 animation.createActor(x, y, {
                     type: 'wolf',
-                }, 1, lastBeforeFov);
+                }, 1, lastBeforeFov);*/
+                let pillarCount = 0;
+                const pillarMax = Math.ceil(cave.tiles.length / 12);
+                const emptyTiles = [];
+                cave.tiles.sort((a, b) => level[a.x][a.y].light - level[b.x][b.y].light).forEach(({x, y}, i) => {
+                    if (pillarCount < pillarMax && surrounded(x, y, (x, y) => level[x][y].passable)) {
+                        const rand = prng();
+                        if (rand < 0.02) {
+                            setTileType(x, y, 'brokenPillar');
+                        } else if (rand < 0.2) {
+                            setTileType(x, y, 'crackedPillar');
+                        } else {
+                            setTileType(x, y, 'pillar');
+                        }
+                        pillarCount++;
+                    }
+                    if (level[x][y].passable) {
+                        emptyTiles.push({x, y});
+                    }
+                });
+                for (let i = 0; i < cave.tiles.length / 40; i++) {
+                    const {x, y} = emptyTiles.splice(randInt(0, emptyTiles.length - 1, prng), 1)[0];
+                    const snake = createActor('snake', x, y);
+                    level[x][y].actor = snake;
+                    schedule.add(snake);
+                    animation.createActor(x, y, {
+                        type: 'snake',
+                    }, 1, lastBeforeFov);
+                }
             },
         },
     };
