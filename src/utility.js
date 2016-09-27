@@ -29,6 +29,75 @@ DIR3.counterclockwise = DIR1;
 const directions = {DIR1, DIR3, DIR5, DIR7, DIR9, DIR11};
 
 //========================================
+//                                   LINES
+
+const cubeDistance = (x1, y1, z1, x2, y2, z2) => {
+    return Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2), Math.abs(z1 - z2));
+}
+
+const distance = (x1, y1, x2, y2) => {
+    return cubeDistance(x1, y1, -x1 - y1, x2, y2, -x2 - y2);
+}
+
+const cubeRound = (x, y, z) => {
+    let rx = Math.round(x);
+    let ry = Math.round(y);
+    let rz = Math.round(z);
+
+    let dx = Math.abs(rx - x);
+    let dy = Math.abs(ry - y);
+    let dz = Math.abs(rz - z);
+
+    if (dx > dy && dx > dz) {
+        rx = -ry - rz;
+    } else if (dy > dz) {
+        ry = -rx - rz;
+    } else {
+        rz = -rx - ry;
+    }
+    return { x: rx, y: ry, z: rz };
+};
+
+const line = (x1, y1, x2, y2, callback, skip = 0) => {
+    const z1 = -x1 - y1;
+    const z2 = -x2 - y2;
+    const dist = cubeDistance(x1, y1, z1, x2, y2, z2);
+    let [x, y, z] = [x1, y1, z1];
+    const [dx, dy, dz] = [x2 - x1, y2 - y1, z2 - z1].map(n => n / dist);
+    for (let i = 0; i <= dist; i++) {
+        if (i >= skip && callback(cubeRound({x, y, z}))) { break; }
+        x += dx;
+        y += dy;
+        z += dz;
+    }
+};
+
+/// Draw a ray from (x1, y1) in the direction of (x2, y2)
+///
+/// x1
+/// y1
+/// x2
+/// y2
+/// callback {function({x, y, z})} called for each tile in ray. Returns false if ray should continue, true if it should stop
+const ray = (x1, y1, x2, y2, callback, skip = 0) => {
+    let z1 = -x1 - y1;
+    let z2 = -x2 - y2;
+    const dist = cubeDistance(x1, y1, z1, x2, y2, z2);
+    const dx = (x2 - x1) / dist;
+    const dy = (y2 - y1) / dist;
+    const dz = (z2 - z1) / dist;
+    for (let i = 0; true; i++) {
+        if (i >= skip && callback(cubeRound(x1, y1, z1))) { break; }
+        x1 += dx;
+        y1 += dy;
+        z1 += dz;
+        if (dist === 0) {
+            break;
+        }
+    }
+};
+
+//========================================
 //                                     FOV
 
 /// Calculates field of view using radial recursive shadowcasting
@@ -264,26 +333,26 @@ const floodFill = (x, y, passable, callback) => {
 // create a schedule
 const createSchedule = () => ({
     // add an event to the schedule delta ticks from the schedule object prev
-    add(event, delta = 0, prev = this) {
+    add(event, delta = 0, prev = this, priority) {
         let next = prev.next;
-        while (next && next.delta <= delta) {
-            delta -= next.delta;
-            prev = next;
-            next = next.next;
+        if (priority) {
+            while (next && next.delta < delta) {
+                delta -= next.delta;
+                prev = next;
+                next = next.next;
+            }
+        } else {
+            while (next && next.delta <= delta) {
+                delta -= next.delta;
+                prev = next;
+                next = next.next;
+            }
         }
         prev.next = {event, delta, next};
         if (next) {
             next.delta -= delta;
-        } else {
-            this.last = prev.next;
         }
         return prev.next;
-    },
-    // add an event to the schedule delta ticks after the last event
-    append(event, delta = 0) {
-        this.last.next = {event, delta};
-        this.last = this.last.next;
-        return this.last;
     },
     // pop the next next event and return its schedule object
     // {event, delta} = next
@@ -293,9 +362,6 @@ const createSchedule = () => ({
         }
         const next = this.next;
         this.next = this.next.next;
-        if (next === this.last) {
-            this.last === undefined;
-        }
         return next;
     },
 });

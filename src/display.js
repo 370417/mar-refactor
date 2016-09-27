@@ -55,21 +55,25 @@ const Tiles = {
         spritex: 0,
         spritey: 0,
         color: wallColor,
+        passable: false,
     },
     floor: {
         spritex: 1,
         spritey: 0,
         color: 'hsl(0, 0%, 100%)',
+        passable: true,
     },
     grass: {
         spritex: 2,
         spritey: 0,
         color: 'hsl(120, 50%, 50%)',
+        passable: true,
     },
     stairsDown: {
         spritex: 8,
         spritey: 0,
         color: 'hsl(40, 0%, 75%)',
+        passable: true,
     },
     player: {
         spritex: 0,
@@ -85,6 +89,7 @@ const Tiles = {
         spritex: 2,
         spritey: 3,
         color: 'white',
+        passable: true,
     },
     tripwire3_9: {
         spritex: 0,
@@ -95,25 +100,34 @@ const Tiles = {
         spritex: 1,
         spritey: 3,
         color: 'white',
+        passable: true,
     },
     pillar: {
         spritex: 5,
         spritey: 0,
         color: wallColor,
+        passable: true,
     },
     crackedPillar: {
         spritex: 6,
         spritey: 0,
         color: wallColor,
+        passable: true,
     },
     brokenPillar: {
         spritex: 7,
         spritey: 0,
         color: wallColor,
+        passable: true,
     },
     reticle: {
-        spritex: 3,
-        spritey: 3,
+        spritex: 4,
+        spritey: 0,
+        color: 'hsla(180, 100%, 50%, 0.333)',
+    },
+    arrow: {
+        spritex: 2,
+        spritey: 4,
         color: 'white',
     },
 };
@@ -176,11 +190,15 @@ const drawTile = (x, y, clear = true) => {
         ctx.clearRect(realx, 0, xu, yu);
     }
     if (tile.visible) {
-        if (tile.actor) {
-            ctx.drawImage(Tiles[tile.actor.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+        let canvas;
+        if (tile.projectile) {
+            canvas = Tiles[tile.projectile].canvas;
+        } else if (tile.actor) {
+            canvas = Tiles[tile.actor.type].canvas;
         } else {
-            ctx.drawImage(Tiles[tile.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+            canvas = Tiles[tile.type].canvas;
         }
+        ctx.drawImage(canvas, 0, 0, xu, yu, realx, 0, xu, yu);
     } else {
         ctx.drawImage(Tiles[tile.type].bgcanvas, 0, 0, xu, yu, realx, 0, xu, yu);
     }
@@ -238,7 +256,7 @@ const animate = () => {
         return;
     }
     let nextFrame;
-    const {event: {x, y, dx, dy, type, tileType, visible, seen, actor}, delta} = next;
+    const {event: {x, y, dx, dy, type, tileType, visible, seen, actor, ox, oy, oldx, oldy}, delta} = next;
     if (type === 'setTile') {
         nextFrame = () => {
             let clear = true;
@@ -294,6 +312,54 @@ const animate = () => {
         nextFrame = () => {
             animate();
         };
+    } else if (type === 'arrow') {
+        nextFrame = () => {
+            const dist = distance(x, y, oldx, oldy);
+            animationQueue.next.delta += dist * 6;
+
+            let delay = 0;
+            let oldx = ox;
+            let oldy = oy;
+            ray(ox, oy, x, y, ({x, y}) => {
+                const tile = level[x][y];
+                animationQueue.add({
+                    type: 'moveArrow',
+                    oldx,
+                    oldy,
+                    x,
+                    y,
+                }, delay, animationQueue, true);
+                delay += 6;
+                oldx = x;
+                oldy = y;
+                if (tile.actor === actor) {
+                    animationQueue.add({
+                        type: 'clearArrow',
+                        x,
+                        y,
+                    }, delay);
+                    /*animationQueue.add({
+                        type: 'takeDamage',
+                    });*/
+                    return true;
+                }
+            }, 1);
+            animate();
+        };
+    } else if (type === 'moveArrow') {
+        nextFrame = () => {
+            level[oldx][oldy].projectile = undefined;
+            drawTile(oldx, oldy);
+            level[x][y].projectile = 'arrow';
+            drawTile(x, y);
+            animate();
+        };
+    } else if (type === 'clearArrow') {
+        nextFrame = () => {
+            level[x][y].projectile = undefined;
+            drawTile(x, y);
+            animate();
+        }
     }
     if (delta && currMode() === 'animating') {
         setTickout(nextFrame, delta);
@@ -382,7 +448,7 @@ const animation = {
 };
 
 //========================================
-//                                  RANGED
+//                                  AIMING
 
 // reticle coordinates
 let reticlex = -1;
@@ -395,6 +461,16 @@ const moveReticle = (x, y) => {
     forEachTileOfLevel(width, height, (x, y) => {
         drawTile(x, y, false);
     });
+    ray(player.x, player.y, x, y, ({x, y}) => {
+        const tile = level[x][y];
+        if (!tile.visible) {
+            return true;
+        }
+        drawReticle(x, y);
+        if (x === reticlex && y === reticley || tile.actor || !Tiles[tile.type].passable) {
+            return true;
+        }
+    }, 1);
     drawReticle(x, y);
 };
 
@@ -439,6 +515,20 @@ const keyCode2code = {
     '90': 'KeyZ',
 };
 
+const key = {
+    move11: 'KeyW',
+    move1: 'KeyE',
+    move9: 'KeyA',
+    move3: 'KeyD',
+    move7: 'KeyZ',
+    move5: 'KeyX',
+    rest: 'KeyS',
+    interact1: 'Enter',
+    interact2: 'Space',
+    back: 'Escape',
+    fire: 'KeyF',
+}
+
 const code2direction = {
     KeyW: DIR11,
     KeyE: DIR1,
@@ -474,15 +564,14 @@ const modalKeydown = {
                 type: 'move',
                 direction: code2direction[code],
             });
-        } else if (code === 'KeyS') {
+        } else if (code === key.rest) {
             input({
                 type: 'rest',
             });
-        } else if (code === 'KeyF') {
+        } else if (code === key.fire) {
             moveReticle(player.x, player.y);
             inputMode.push('aiming');
-        }
-        if (code === 'Enter' || code === 'Space') {
+        } else if (code === key.interact1 || code === key.interact2) {
             input({
                 type: 'interact',
             });
@@ -492,6 +581,19 @@ const modalKeydown = {
         if (code2direction[code]) {
             const {dx, dy} = code2direction[code];
             moveReticle(reticlex + dx, reticley + dy);
+        } else if (code === key.back) {
+            clearAll();
+            forEachTileOfLevel(width, height, (x, y) => drawTile(x, y));
+            inputMode.pop();
+        } else if (code === key.fire) {
+            clearAll();
+            forEachTileOfLevel(width, height, (x, y) => drawTile(x, y));
+            inputMode.pop();
+            input({
+                type: 'fire',
+                x: reticlex,
+                y: reticley,
+            });
         }
     },
 };

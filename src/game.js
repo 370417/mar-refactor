@@ -125,11 +125,32 @@ const move = function(dx, dy, delta = 0) {
             this.see();
         }
 
-        schedule.add(this, this.delay);
+        schedule.add(this, this.delay, schedule, this === player);
         nextMove();
     } else {
         // tell display this accidentally bumped something
     }
+};
+
+const fire = function(x, y, delta = 0) {
+    let targetx, targety;
+    let actor;
+    ray(this.x, this.y, x, y, ({x, y}) => {
+        const tile = level[x][y];
+        if (!tile.passable) {
+            return true;
+        }
+        targetx = x;
+        targety = y;
+        if (tile.actor) {
+            actor = tile.actor;
+            return true;
+        }
+    }, 1);
+    prevAnimation = animation.fire('arrow', this.x, this.y, x, y, delta, prevAnimation);
+
+    schedule.add(this, this.delay, schedule, this === player);
+    nextMove();
 };
 
 const wandering = function(delta) {
@@ -156,6 +177,7 @@ const createActor = (() => {
         move,
         lastMove: { dx: 0, dy: 0 },
         rest,
+        fire,
         delay: 24,
     };
 
@@ -227,6 +249,8 @@ const input = (action) => {
         if (level[player.x][player.y].type === 'stairsDown') {
             descend();
         }
+    } else if (action.type === 'fire') {
+        player.fire(action.x, action.y);
     }
 };
 
