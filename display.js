@@ -312,14 +312,14 @@ const animate = () => {
         nextFrame = () => {
             animate();
         };
-    } else if (type === 'arrow') {
+    } else if (type === 'arrowHit') {
         nextFrame = () => {
-            const dist = distance(x, y, oldx, oldy);
-            animationQueue.next.delta += dist * 6;
-
             let delay = 0;
             let oldx = ox;
             let oldy = oy;
+            const dist = distance(x, y, oldx, oldy); // BUG - delay depends on target tile when it should depend on where actor is
+            animationQueue.next.delta += dist * 6;
+
             ray(ox, oy, x, y, ({x, y}) => {
                 const tile = level[x][y];
                 animationQueue.add({
@@ -346,6 +346,29 @@ const animate = () => {
             }, 1);
             animate();
         };
+    } else if (type === 'arrowMiss') {
+        nextFrame = () => {
+            let delay = 0;
+            let oldx = ox;
+            let oldy = oy;
+            ray(ox, oy, x, y, ({x, y}) => {
+                const tile = level[x][y];
+                if (!Tiles[tile.type].passable) {
+                    return true;
+                }
+                animationQueue.add({
+                    type: 'moveArrow',
+                    oldx,
+                    oldy,
+                    x,
+                    y,
+                }, delay, animationQueue, true);
+                delay += 6;
+                oldx = x;
+                oldy = y;
+            }, 1);
+            animate();
+        };
     } else if (type === 'moveArrow') {
         nextFrame = () => {
             level[oldx][oldy].projectile = undefined;
@@ -359,7 +382,7 @@ const animate = () => {
             level[x][y].projectile = undefined;
             drawTile(x, y);
             animate();
-        }
+        };
     }
     if (delta && currMode() === 'animating') {
         setTickout(nextFrame, delta);
@@ -425,14 +448,23 @@ const animation = {
             type: 'wait',
         }, delay, prev);
     },
-    fire(projectile, ox, oy, x, y, delay, prev) {
+    fireHit(projectile, ox, oy, x, y, targetx, targety, delay, prev) {
         return animationQueue.add({
-            type: projectile,
+            type: projectile + 'Hit',
             ox,
             oy,
             x,
             y,
-            actor: level[x][y].actor,
+            actor: level[targetx][targety].actor,
+        }, delay, prev);
+    },
+    fireMiss(projectile, ox, oy, x, y, delay, prev) {
+        return animationQueue.add({
+            type: projectile + 'Miss',
+            ox,
+            oy,
+            x,
+            y,
         }, delay, prev);
     },
     animate() {
@@ -467,7 +499,7 @@ const moveReticle = (x, y) => {
             return true;
         }
         drawReticle(x, y);
-        if (x === reticlex && y === reticley || tile.actor || !Tiles[tile.type].passable) {
+        if (tile.actor || !Tiles[tile.type].passable) {
             return true;
         }
     }, 1);
@@ -527,7 +559,7 @@ const key = {
     interact2: 'Space',
     back: 'Escape',
     fire: 'KeyF',
-}
+};
 
 const code2direction = {
     KeyW: DIR11,

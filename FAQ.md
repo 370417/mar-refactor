@@ -8,6 +8,7 @@
 [14: Inspiration](#14-inspiration)  
 [36: Character Progression](#36-character-progression)  
 [45: Lanugages Redux](#45-languages-redux)  
+[48: Developer Motivation](#48-developer-motivation)  
 
 ## 1: Languages and Libraries
 
@@ -232,3 +233,7 @@ See [question 1](#1-languages-and-libraries).
 ## 47: Options and Configuration
 
 > What kinds of options does your roguelike make available to players? UI/gameplay/other features? How does the player modify these options? In game? Or maybe via external files (txt/ini/xml/json/lua/etc)
+
+## 48: Developer Motivation
+
+> How do you get motivated? How do you stay motivated?

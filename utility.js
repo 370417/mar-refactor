@@ -28,6 +28,23 @@ DIR3.counterclockwise = DIR1;
 
 const directions = {DIR1, DIR3, DIR5, DIR7, DIR9, DIR11};
 
+const Direction = (dx, dy) => {
+    return {
+        '1': {
+            '-1': DIR1,
+            '0': DIR3,
+        },
+        '0': {
+            '1': DIR5,
+            '-1': DIR11,
+        },
+        '-1': {
+            '1': DIR7,
+            '0': DIR9,
+        },
+    }[dx][dy];
+};
+
 //========================================
 //                                   LINES
 

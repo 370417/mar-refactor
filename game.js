@@ -147,7 +147,11 @@ const fire = function(x, y, delta = 0) {
             return true;
         }
     }, 1);
-    prevAnimation = animation.fire('arrow', this.x, this.y, x, y, delta, prevAnimation);
+    if (actor) {
+        prevAnimation = animation.fireHit('arrow', this.x, this.y, x, y, targetx, targety, delta, prevAnimation);
+    } else {
+        prevAnimation = animation.fireMiss('arrow', this.x, this.y, x, y, delta, prevAnimation);
+    }
 
     schedule.add(this, this.delay, schedule, this === player);
     nextMove();
