@@ -99,6 +99,15 @@ const createGame = function({width, height, seed, output}) {
                                 visible: true,
                             },
                         });
+                        if (tile.prop) {
+                            output({
+                                type: 'set prop',
+                                value: {
+                                    type: tile.prop,
+                                    x, y,
+                                },
+                            });
+                        }
                     }
                     if (tile.actor) {
                         output({
@@ -152,7 +161,7 @@ const createGame = function({width, height, seed, output}) {
         
         schedule.add(actor, 0, actor.priority);
 
-        if (level) {
+        if (level && x && y) {
             level[x][y].actor = actor;
         }
 
@@ -368,6 +377,47 @@ const createGame = function({width, height, seed, output}) {
             }
         };
 
+        const placeTripwires = function() {
+            const search = function(x, y, dir) {
+                if (level[x+dir.dx][y+dir.dy].prop ||
+                    level[x+dir.dx][y+dir.dy].actor ||
+                    isWall(x + dir.clockwise.dx, y + dir.clockwise.dy) ||
+                    isWall(x + dir.counterclockwise.dx, y + dir.counterclockwise.dy)) {
+                    return false;
+                } else if (isWall(x + dir.dx, y + dir.dy)) {
+                    return true;
+                } else {
+                    return search(x + dir.dx, y + dir.dy, dir);
+                }
+            };
+
+            const placeWire = function(type, x, y, dir) {
+                if (!isWall(x, y)) {
+                    level[x][y].prop = type;
+                    placeWire(type, x + dir.dx, y + dir.dy, dir);
+                }
+            };
+
+            forEachInnerTile((x, y) => {
+                const tile = level[x][y];
+                if (tile.prop || tile.type === 'wall') {
+                    return false;
+                }
+                if (search(x, y, DIR5) && search(x, y, DIR11)) {
+                    placeWire('tripwirex', x, y, DIR5);
+                    placeWire('tripwirex', x, y, DIR11);
+                }
+                if (search(x, y, DIR3) && search(x, y, DIR9)) {
+                    placeWire('tripwirey', x, y, DIR3);
+                    placeWire('tripwirey', x, y, DIR9);
+                }
+                if (search(x, y, DIR1) && search(x, y, DIR7)) {
+                    placeWire('tripwirez', x, y, DIR1);
+                    placeWire('tripwirez', x, y, DIR7);
+                }
+            });
+        };
+
         init();
         carveCaves();
         removeOtherCaves();
@@ -381,6 +431,7 @@ const createGame = function({width, height, seed, output}) {
         }
         //testGrass();
         placePlayer();
+        placeTripwires();
 
         return level;
     };
