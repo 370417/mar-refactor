@@ -1,4 +1,4 @@
-{
+//{
 
 let player = {};
 
@@ -48,19 +48,35 @@ for (let i = 0; i < height; i++) {
 
 const tileset = document.createElement('img');
 
-const wallColor = 'hsl(40, 10%, 75%)'
+const wallColor = 'hsl(40, 10%, 67%)';
 
 const Tiles = {
     wall: {
         spritex: 0,
         spritey: 0,
         color: wallColor,
+        bgcolor: 'hsl(240, 10%, 18%)',
         passable: false,
     },
+    wallBottomRight: {
+        spritex: 3,
+        spritey: 2,
+        //color: 'hsl(40, 5%, 33%)',
+        //bgcolor: 'hsl(240, 10%, 25%)',
+        color: 'black',
+    },
+    wallBottomLeft: {
+        spritex: 4,
+        spritey: 2,
+        //color: 'hsl(40, 5%, 33%)',
+        //bgcolor: 'hsl(240, 10%, 25%)',
+        color: 'black',
+    },
     floor: {
-        spritex: 1,
+        spritex: 0, //1,
         spritey: 0,
-        color: 'hsl(0, 0%, 100%)',
+        color: 'hsl(40, 10%, 25%)', //'hsl(0, 0%, 100%)',
+        bgcolor: 'hsl(240, 10%, 10%)',
         passable: true,
     },
     grass: {
@@ -149,7 +165,7 @@ const cacheTile = (tile) => {
     bgcanvas.height = yu;
     const bgctx = bgcanvas.getContext('2d');
     bgctx.drawImage(canvas, 0, 0, xu, yu);
-    bgctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    bgctx.fillStyle = tile.bgcolor || 'rgba(0, 0, 0, 0.6)';
     bgctx.globalCompositeOperation = 'source-atop';
     bgctx.fillRect(0, 0, xu, yu);
     tile.bgcanvas = bgcanvas;
@@ -164,6 +180,15 @@ const cacheTiles = () => {
 
 //========================================
 //                                 DRAWING
+
+// create a dislpay-side level
+const level = [];
+for (let x = 0; x < width; x++) {
+    level[x] = [];
+    for (let y = 0; y < height; y++) {
+        level[x][y] = {};
+    }
+}
 
 const clearTile = (x, y) => {
     const ctx = ctxs[y];
@@ -190,7 +215,7 @@ const drawTile = (x, y, clear = true) => {
         ctx.clearRect(realx, 0, xu, yu);
     }
     if (tile.visible) {
-        let canvas;
+        /*let canvas;
         if (tile.projectile) {
             canvas = Tiles[tile.projectile].canvas;
         } else if (tile.actor) {
@@ -198,7 +223,11 @@ const drawTile = (x, y, clear = true) => {
         } else {
             canvas = Tiles[tile.type].canvas;
         }
-        ctx.drawImage(canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+        ctx.drawImage(canvas, 0, 0, xu, yu, realx, 0, xu, yu);*/
+        ctx.drawImage(Tiles[tile.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+        if (tile.actor) {
+            ctx.drawImage(Tiles[tile.actor.type].canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+        }
     } else {
         ctx.drawImage(Tiles[tile.type].bgcanvas, 0, 0, xu, yu, realx, 0, xu, yu);
     }
@@ -210,17 +239,31 @@ const drawReticle = (x, y) => {
     ctx.drawImage(Tiles.reticle.canvas, 0, 0, xu, yu, realx, 0, xu, yu);
 };
 
+const tileIsType = (x, y, type) => level[x] && level[x][y] && level[x][y].type === type;
+
+const updateWalls = () => {return;
+    const passable = (x, y) => !level[x][y] || !level[x][y].type || Tiles[level[x][y].type].passable;
+
+    forEachTileOfLevel(width, height, (x, y) => {
+        if (level[x][y].type === 'wall') {
+            const ctx = ctxs[y];
+            const realx = (x - (height - y - 1) / 2) * xu;
+            if (passable(x + DIR5.dx, y + DIR5.dy)) {
+                const Tile = Tiles.wallBottomRight;
+                const canvas = level[x][y].visible ? Tile.canvas : Tile.bgcanvas;
+                ctx.drawImage(canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+            }
+            if (passable(x + DIR7.dx, y + DIR7.dy)) {
+                const Tile = Tiles.wallBottomLeft;
+                const canvas = level[x][y].visible ? Tile.canvas : Tile.bgcanvas;
+                ctx.drawImage(canvas, 0, 0, xu, yu, realx, 0, xu, yu);
+            }
+        }
+    });
+};
+
 //========================================
 //                               ANIMATION
-
-// create a dislpay-side level
-const level = [];
-for (let x = 0; x < width; x++) {
-    level[x] = [];
-    for (let y = 0; y < height; y++) {
-        level[x][y] = {};
-    }
-}
 
 const animationQueue = createSchedule();
 let timeout;
@@ -253,139 +296,45 @@ const animate = () => {
         while (currMode() === 'playing' && keyBuffer.length) {
             keydown({code: keyBuffer.shift()});
         }
+        updateWalls();
         return;
     }
-    let nextFrame;
-    const {event: {x, y, dx, dy, type, tileType, visible, seen, actor, ox, oy, oldx, oldy}, delta} = next;
-    if (type === 'setTile') {
+    const animType = next.event.type;
+    const delay = next.event.delta || 0;
+    let nextFrame = () => console.log(animType);
+
+    if (animType === 'new tile') {
         nextFrame = () => {
-            let clear = true;
-            if (level[x][y].type === tileType) {
-                clear = false;
-            }
-            level[x][y].type = tileType;
-            level[x][y].visible = visible;
+            const {x, y, type, visible, seen} = next.event.value;
+            level[x][y].type = type;
             level[x][y].seen = seen;
-            drawTile(x, y, clear);
-            animate();
-        };
-    } else if (type === 'clearTile') {
-        nextFrame = () => {
-            level[x][y].seen = false;
-            clearTile(x, y);
-            animate();
-        };
-    } else if (type === 'clearAll') {
-        nextFrame = () => {
-            forEachTileOfLevel(width, height, (x, y) => {
-                level[x][y] = {};
-            });
-            clearAll();
-            animate();
-        };
-    } else if (type === 'createActor') {
-        nextFrame = () => {
-            level[x][y].actor = actor;
-            if (actor.type === 'player') {
-                player.x = x;
-                player.y = y;
-            }
+            level[x][y].visible = visible;
             drawTile(x, y);
             animate();
         };
-    } else if (type === 'moveActor') {
+    }
+    else if (animType === 'change tile visibility') {
         nextFrame = () => {
-            const actor = level[x][y].actor;
-            level[x][y].actor = undefined;
-            const x2 = x + dx;
-            const y2 = y + dy;
-            level[x2][y2].actor = actor;
-            if (actor.type === 'player') {
-                player.x = x2;
-                player.y = y2;
-            }
-            drawTile(x, y);
+            const {x, y, visible} = next.event.value;
+            level[x][y].visible = visible;
+            drawTile(x, y, false);
+            animate();
+        };
+    }
+    else if (animType === 'move actor') {
+        nextFrame = () => {
+            const {x1, y1, x2, y2, type} = next.event.value;
+            level[x1][y1].actor = undefined;
+            drawTile(x1, y1);
+            level[x2][y2].actor = {type};
             drawTile(x2, y2);
             animate();
         };
-    } else if (type === 'wait') {
-        nextFrame = () => {
-            animate();
-        };
-    } else if (type === 'arrowHit') {
-        nextFrame = () => {
-            let delay = 0;
-            let oldx = ox;
-            let oldy = oy;
-            const dist = distance(x, y, oldx, oldy); // BUG - delay depends on target tile when it should depend on where actor is
-            animationQueue.next.delta += dist * 6;
-
-            ray(ox, oy, x, y, ({x, y}) => {
-                const tile = level[x][y];
-                animationQueue.add({
-                    type: 'moveArrow',
-                    oldx,
-                    oldy,
-                    x,
-                    y,
-                }, delay, animationQueue, true);
-                delay += 6;
-                oldx = x;
-                oldy = y;
-                if (tile.actor === actor) {
-                    animationQueue.add({
-                        type: 'clearArrow',
-                        x,
-                        y,
-                    }, delay);
-                    /*animationQueue.add({
-                        type: 'takeDamage',
-                    });*/
-                    return true;
-                }
-            }, 1);
-            animate();
-        };
-    } else if (type === 'arrowMiss') {
-        nextFrame = () => {
-            let delay = 0;
-            let oldx = ox;
-            let oldy = oy;
-            ray(ox, oy, x, y, ({x, y}) => {
-                const tile = level[x][y];
-                if (!Tiles[tile.type].passable) {
-                    return true;
-                }
-                animationQueue.add({
-                    type: 'moveArrow',
-                    oldx,
-                    oldy,
-                    x,
-                    y,
-                }, delay, animationQueue, true);
-                delay += 6;
-                oldx = x;
-                oldy = y;
-            }, 1);
-            animate();
-        };
-    } else if (type === 'moveArrow') {
-        nextFrame = () => {
-            level[oldx][oldy].projectile = undefined;
-            drawTile(oldx, oldy);
-            level[x][y].projectile = 'arrow';
-            drawTile(x, y);
-            animate();
-        };
-    } else if (type === 'clearArrow') {
-        nextFrame = () => {
-            level[x][y].projectile = undefined;
-            drawTile(x, y);
-            animate();
-        };
     }
-    if (delta && currMode() === 'animating') {
-        setTickout(nextFrame, delta);
+
+    if (delay && currMode() === 'animating') {
+        updateWalls();
+        setTickout(nextFrame, delay);
     } else {
         nextFrame();
     }
@@ -477,6 +426,20 @@ const animation = {
         }
         animate();
     },
+};
+
+//========================================
+//                                  OUTPUT
+
+const output = ({type, value, delta}) => {
+    if (type === 'done') {
+        if (currMode() === 'playing') {
+            inputMode.push('animating');
+        }
+        animate();
+    } else {
+        animationQueue.add({type, value, delta}, 0);
+    }
 };
 
 //========================================
@@ -594,7 +557,7 @@ const modalKeydown = {
         if (code2direction[code]) {
             input({
                 type: 'move',
-                direction: code2direction[code],
+                value: code2direction[code],
             });
         } else if (code === key.rest) {
             input({
@@ -623,8 +586,10 @@ const modalKeydown = {
             inputMode.pop();
             input({
                 type: 'fire',
-                x: reticlex,
-                y: reticley,
+                value: {
+                    x: reticlex,
+                    y: reticley,
+                },
             });
         }
     },
@@ -647,7 +612,7 @@ const startGame = () => {
         width, 
         height,
         seed,
-        animation,
+        output,
     });
 
     window.addEventListener('keydown', keydown, false);
@@ -656,4 +621,4 @@ const startGame = () => {
 tileset.addEventListener('load', startGame);
 tileset.src = 'tileset2.png';
 
-}
+//}

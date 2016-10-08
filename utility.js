@@ -4,6 +4,8 @@ Math.random = undefined;
 //========================================
 //                              DIRECTIONS
 
+const DIR0 = { dx: 0, dy: 0, dz: 0 };
+
 // direction names are based on clock directions
 const DIR1  = { dx: 1, dy:-1, dz: 0 };
 const DIR3  = { dx: 1, dy: 0, dz:-1 };
@@ -247,13 +249,13 @@ const influenceMap = (nodes, forEachNeighbor, getDistance, setDistance, getCost,
 //========================================
 //                                     RNG
 
-// generate a random integer in the interval [min, max]
+// generate a random integer in the interval [min, max)
 const randInt = (min, max, prng) => {
     if (min > max) {
         console.error('randInt: min > max');
         return NaN;
     }
-    return min + ((max - min + 1) * prng()) << 0;
+    return min + Math.floor((max - min) * prng());
 };
 
 // pick a random element of an array or object
@@ -333,6 +335,18 @@ const countGroups = (x, y, isType) => {
     }
 };
 
+// count the number of tiles of a certain type around a tile
+const countNeighbors = (x, y, isType) => {
+    let count = 0;
+    for (const key in directions) {
+        const {dx, dy} = directions[key];
+        if (isType(x + dx, y + dy)) {
+            count++;
+        }
+    }
+    return count;
+};
+
 // floodfill tiles, starting from (x, y), including those that are passable(x, y), and calling callback(x, y) for each flooded tile
 const floodFill = (x, y, passable, callback) => {
     if (passable(x, y)) {
@@ -382,3 +396,40 @@ const createSchedule = () => ({
         return next;
     },
 });
+
+//========================================
+//                               SCHEDULER
+
+const Schedule = function() {
+    const root = {};
+
+    return {
+        // event - object to be added to schedule
+        // delta - ticks before event occurs
+        // priority - bigger priority events happen before smaller priority evens at the same tick
+        add: (event, delta = 0, priority = 0) => {
+            let prev = root;
+            let next = prev.next;
+
+            while (next && delta >= next.delta && priority <= next.priority) {
+                delta -= next.delta;
+                prev = prev.next;
+                next = next.next;
+            }
+
+            prev.next = {event, delta, next, priority};
+
+            if (next) {
+                next.delta -= delta;
+            }
+        },
+        // pop the next event
+        advance: () => {
+            if (root) {
+                const {event, delta} = root.next;
+                root.next = root.next.next;
+                return {event, delta};
+            }
+        },
+    };
+};
