@@ -72,9 +72,9 @@ const Tiles = {
         passable: true,
     },
     stairsDown: {
-        spritex: 8,
-        spritey: 0,
-        color: 'hsl(40, 0%, 75%)',
+        spritex: 7,
+        spritey: 1,
+        color: 'white',
         passable: true,
     },
     player: {
@@ -577,7 +577,7 @@ const keydown = (e) => {
 //                              START GAME
 
 const startGame = () => {
-    const seed =  Date.now();
+    const seed = Date.now();
     console.log(seed);
     cacheTiles();
     input = createGame({
@@ -591,6 +591,6 @@ const startGame = () => {
 };
 
 tileset.addEventListener('load', startGame);
-tileset.src = 'tileset2.png';
+tileset.src = 'tileset.png';
 
 }

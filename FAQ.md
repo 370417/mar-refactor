@@ -3,9 +3,12 @@
 [1: Languages and Libaries](#1-languages-and-libraries)  
 [2: Development Tools](#2-development-tools)  
 [3: The Game Loop](#3-the-game-loop)  
+[4: World Architecture](#4-world-architecture)  
 [12: Field of Vision](#12-field-of-vision)  
 [13: Geometry](#13-geometry)  
 [14: Inspiration](#14-inspiration)  
+[28: Map Object Representation](#28-map-object-representation)  
+[31: Pain Points](#31-pain-points)  
 [36: Character Progression](#36-character-progression)  
 [45: Lanugages Redux](#45-languages-redux)  
 [48: Developer Motivation](#48-developer-motivation)  
@@ -21,19 +24,21 @@ Pros:
 * Cross-platform and install-free
 * Lots of freedom, with dynamic typing, prototypical inheritance, and first-class functions
 * Fast development cycle
-* I write js es6, the new standard for javascript, and transpile it to es5, the widely-supported standard, using Babel
 * Easy UI with HTML/CSS
 
 Cons:
 
 * Client-side, can't prevent cheating
 * Lots of freedom, with dynamic typing, prototypical inheritance, and first-class functions
-* It takes time (only 5 seconds or so) to transpile my code
 * Not as fast as other languages
+
+I do not use rot.js, the most popular roguelike library, because I like having more control over the specifics of my game, and using rot.js prevents me from making certain quirks and optimizations that I like. Right now, I use a heap library for use in pathfinding, and an rng library because javascript's default rng can't be seeded.
 
 ## 2: Development Tools
 
 > What kind of publicly available tools do you use to develop your roguelike(s)? What for? Have you built any of your own tools? And if so, what do they do?
+
+I write my code in Sublime Text 2 and execute it in Chrome with no development-related addons.
 
 ## 3: The Game Loop
 
@@ -42,6 +47,27 @@ Cons:
 ## 4: World Architecture
 
 > How do you divide and organize the objects of your game world? Is it as simple as lists of objects? How are related objects handled?
+
+My game is rather simple. There is no overworld or branches, and only the current level is generated and stored at any time. There are two places where information about the world is stored:
+
+Game
+
+* Handles game state and mechanics
+* Stores map information in a 2d array of tiles  
+  Each tile can have:
+  * A type: wall, floor, etc
+  * Properties like passable and transparent
+  * An item: Anything that can be picked up
+  * An actor: Either the player or a monster. Not all actors have to be stored on the map
+  * A prop: Anything else that is on the tile, eg grass, stairs, traps
+
+Display
+
+* Handles input and output
+* Stores map information in a 2d array of tiles. Tiles are similar to those in the Game code, but they lack the innards necessary for game mechanics, and instead have extra appearance-related information.
+
+
+The Game only tells the Display about changies in what the player can see, and it relies on the Display to store what little game state it is aware of and display it. Because of this, only changes in fov and the like cause redraws, which helps speed things up.
 
 ## 5: Data Management
 
@@ -75,7 +101,9 @@ Cons:
 
 > What FOV algorithm do you use, and why? Does it have any drawbacks or particularly useful characteristics? Does it have bidirectional symmetry? Is it fast? How did you come up with it?
 
-I use recursive shadowcasting. It's fast, efficient, and elegant. To quickly summarize how the algorithm works, it casts arcs of light at increasing ranges, recursively splitting into smaller arcs when it encounters obstables. I think it's just about a perfect algorithm for rectangular grids, where you can sweep octants, and everything is generally understandable. However, Many a Rogue uses a hex grid, so I use a radial variant that sweeps out arcs instead of lines. Hexagon math is a bit complicated, so I pretend that walls are diamonds that point towards the origin. That means that, unlike the rectangular version, the hex version of recursive shadowcasting lacks bidirectional symmetry.
+I use recursive shadowcasting. It's fast, efficient, and elegant. To quickly summarize how the algorithm works, it casts arcs of light at increasing ranges, recursively splitting into smaller arcs when it encounters obstables. I think it's just about a perfect algorithm for rectangular grids, where you can sweep octants, and everything is generally understandable. However, Many a Rogue uses a hex grid, so I use a radial variant that sweeps out arcs instead of lines. Hexagon math is a bit complicated, so I pretend that walls are diamonds that point towards the origin. That means that, unlike the rectangular version, the hex version of recursive shadowcasting lacks perfect bidirectional symmetry. Still, I think the shapes it produces are lovely and intuitive. 
+
+Also, figuring out weather walls are in FOV has always been a massive pain, especially when I was trying to antialias my FOV for an earlier project. Now, I ignore walls when calcularing fov, and I light them after I light floors.
 
 n.b. The simplest version of recursive shadowcasting does not have bidirectional symmetry. All you need to do to ensure symmetry is to only light tiles whose *centers* lie in the lit area.
 
@@ -83,7 +111,7 @@ n.b. The simplest version of recursive shadowcasting does not have bidirectional
 
 > Does it use continuous space? Does it use hexes, squares, or something else? If square, is movement Chebyshev, Euclidean, or Taxicab? Same question for line of sight and effects with limited range.
 
-Many a Rogue uses a hex grid. This works well because the game takes place in caves, and hexes tend to shine when representing natural formations as opposed to artificial structures. Hexes are also very nice because you no longer have to deal with diagonals or any sort of varying movement costs. The challenges of using hexes are that it is less intuitive, and its more difficult to display the grid. Games like Cogmind and Pyromancer subdivide the main grid for particle effects, which is still possible but less symmetric if using hexes. There's also less free assests floating around for hex games, but I talk more about that in the [map object representation](#28-map-object-representation) question.
+Many a Rogue uses a hex grid. This works well because the game takes place in caves, and hexes tend to shine when representing natural formations as opposed to artificial structures. Hexes are also very nice because you no longer have to deal with diagonals or any sort of varying movement costs. The challenges of using hexes are that it is less intuitive to control, and its more difficult to display the grid. Games like Cogmind and Pyromancer subdivide the main grid for particle effects, which is still possible but less symmetric if using hexes. There's also less free assests floating around for hex games, but I talk more about that in the [map object representation](#28-map-object-representation) question.
 
 ## 14: Inspiration
 
@@ -93,6 +121,7 @@ Many a Rogue uses a hex grid. This works well because the game takes place in ca
 * Two other flash games, Starfighter: Disputed Galaxy and Realm of the Mad God
 * The roguelikes I play semi-frequently: Rogue, Brogue, and Sil
 * /r/roguelikedev
+* Mythology and fables
 * More that doesn't come to mind right now
 
 ## 15: AI
@@ -165,6 +194,17 @@ Describe your animation system's architecture. How are animations associated wit
 ## 31: Pain Points
 
 > "What's the most painful or tricky part in how your game is made up? Did something take a huge amount of effort to get right? Are there areas in the engine where the code is a mess that you dread to even look at? Are there ideas you have that you just haven't gotten to work or haven't figured out how to turn into code? What do you think are the hardest parts in a roguelike codebase to get right, and do you have any implementation tips for them?"
+
+I have a file called utility.js that has beautiful utility functions that are geometry independant, simple to understand, ~~well commented~~, and useful for just about any roguelike I try to make. This file has:
+
+* hex directions
+* lines, rays, distance
+* fov
+* rng helper functions
+* hex grid stuff that is helpful for level generation
+* game loop
+
+Everything else in my code is a pain point.
 
 ## 32: Combat Algorithms
 
