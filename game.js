@@ -19,7 +19,7 @@ const createGame = function({width, height, seed, output}) {
         wall: {
             passable: false,
             transparent: false,
-        }
+        },
     };
 
     const changeTileType = function(tile, type) {

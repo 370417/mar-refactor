@@ -4,13 +4,18 @@
 [2: Development Tools](#2-development-tools)  
 [3: The Game Loop](#3-the-game-loop)  
 [4: World Architecture](#4-world-architecture)  
+[10: Project Management](#10-project-management)  
+[11: Random Number Generation](#11-random-number-generation)  
 [12: Field of Vision](#12-field-of-vision)  
 [13: Geometry](#13-geometry)  
 [14: Inspiration](#14-inspiration)  
+[22: Map Generation](#22-map-generation)  
+[23: Map Design](#23-map-design)  
 [28: Map Object Representation](#28-map-object-representation)  
 [31: Pain Points](#31-pain-points)  
 [36: Character Progression](#36-character-progression)  
-[45: Lanugages Redux](#45-languages-redux)  
+[41: Time Systems](#41-time-systems)  
+[45: Libraries Redux](#45-libraries-redux)  
 [48: Developer Motivation](#48-developer-motivation)  
 
 ## 1: Languages and Libraries
@@ -44,6 +49,8 @@ I write my code in Sublime Text 2 and execute it in Chrome with no development-r
 
 > How do you structure your game loop? Why did you choose that method? Or maybe you're using an existing engine that already handles all this for you under the hood?
 
+The Display receives user input and tells it to the Game, which is independant of UI. The game processes that input (see the [time systems](#41-time-systems) question for more details) and gives the Display some output. That output is placed in a schedule, then animated when the game says its ready for more input.
+
 ## 4: World Architecture
 
 > How do you divide and organize the objects of your game world? Is it as simple as lists of objects? How are related objects handled?
@@ -65,7 +72,6 @@ Display
 
 * Handles input and output
 * Stores map information in a 2d array of tiles. Tiles are similar to those in the Game code, but they lack the innards necessary for game mechanics, and instead have extra appearance-related information.
-
 
 The Game only tells the Display about changies in what the player can see, and it relies on the Display to store what little game state it is aware of and display it. Because of this, only changes in fov and the like cause redraws, which helps speed things up.
 
@@ -93,9 +99,17 @@ The Game only tells the Display about changies in what the player can see, and i
 
 > How many different pieces is your project composed of? How do you organize them? Are there any specific reasons or benefits for which you chose to handle things the way you do?
 
+* utility {436 lines} general helper functions that could be used in a different game.
+* game {469 lines} handles game state and game logic
+* display {597 lines} handles input and output
+
+Besides those 3 javascript files, I use two libraries and some HTML and CSS for the display.
+
 ## 11: Random Number Generation
 
 > What type of RNG do you use? Is it provided by the language or an external library? Is there anything interesting you do with random numbers? Do you store seeds? Bags of numbers? Use predictable sequences?
+
+Javascript's default rng is unseedable, so I use a library called [seedrandom.js](https://github.com/davidbau/seedrandom). I seed games and use separate prngs for level generation and everything else so that I can deterministically reproduce level generation bugs. In the future, I might do recordings Brogue style, where I simulate the game with the same seed, playing through the user inputs.
 
 ## 12: Field of Vision
 
@@ -156,9 +170,31 @@ Many a Rogue uses a hex grid. This works well because the game takes place in ca
 
 > What types of mapgen algorithms do you use in your roguelike? Are maps fully procedural or do they contain hand-made pieces as well? Have you encountered and/or overcome any obstacles regarding map generation?
 
+*One map to rule them all, one map to find them,*  
+*One map to bring them all and in the darkness bind them.*
+
+The bulk of my map generation was inspired by ais523's algorithm for Gehennom Caverns.
+
+> The algorithm for this is really cool, actually: it starts out by making a list of all the positions on the map, shuffles them into a random order, then goes through in that order deciding what to do with each tile based on what is adjacent to it so far. If nothing next to it is decided yet, then a choice is made at random, but this random choice can be weighted. Currently, it's weighted based on the depth of the level within the Gehennom branch, so that near the top you get rather open levels, and near the bottom you get a lot of nooks and crannies and corridors. ... a square becomes a wall if it's adjacent to exactly one run of walls (looking at the 8 squares running around it), and a floor if it's adjacent to more than one run of walls (which mathematically prevents the level becoming disconnected)
+
+What I do:
+
+* Fill all tiles with wall
+* Turn the starting point into floor. The starting point is determined by where the player descended from. By default, it is the center of the map for the first level.
+* Iterate through all inner tiles (those that are not on the edge of the map) in random order: if the number of groups of floor tiles around a tile is not one, turn that tile into floor. This generates a bunch of twisty, loopy passageways with small clumps of open space.
+* Fill in floor tiles with walls if they aren't reachable from the starting point.
+* Remove groups of walls with less than 6 wall tiles. Now it starts to look cavey.
+* Fill dead ends with walls. A cave tile is a floor tile that is adjacent to a single contiguous group of floor tiles. A cave is a contiguous group of cave tiles. A dead end is a one-tile cave. Also, during this step, if I happen to fill the starting point with a wall, I move it to a neighboring floor tile.
+* Look for groups of walls completely surrounded by floor tiles that are not cave tiles. Turn thoose walls into floors. This eliminates loops of tunnels.
+* Check the size of the level. If it is too small, restart.
+* Place the player at the starting point.
+* Place tripwires. 
+
 ## 23: Map Design
 
 > What's your process for designing maps? How do the map layouts reflect your roguelike's mechanics, content, theme, strategies, and other elements? What defines a fun/challenging/thematic/??? map for you/your game?
+
+I stumbled across ais523's cave algorithm, tried it for hex, and fiddled with it until it was satisfactory. Since I had spent so much time working on it, I'm almost obligated to use caves now. 
 
 ## 24: World Structure
 
@@ -172,8 +208,6 @@ Many a Rogue uses a hex grid. This works well because the game takes place in ca
 
 > Do you use animations to show the results of an attack? Attacks themselves? (Especially those at range.) Movement? Other elements?
 Describe your animation system's architecture. How are animations associated with an action? How do you work within the limitations of ASCII/2D grids? Any "clever hacks"?
-
-
 
 ## 27: Color
 
@@ -226,7 +260,19 @@ Everything else in my code is a pain point.
 
 > How do you enable character progress? An XP system? Some other form of leveling? Purely equipment-based? A combination of skills and items?
 
+Attributes
+
+* Life - How many hitpoints a character has. When these run out, it dies
+* Strength - Phyisical ability
+
 Skills
+
+Almost everything the player can do in Many a Rogue is a skill. For example, here is one of the player's starting skills:
+
+*Unarmed Combat*  
+Trigger: Bump into an enemy  
+Conditions: Have no weapon equipped  
+Effect: Deal damage to the enemy equal to your strength
 
 Items
 
