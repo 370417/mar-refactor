@@ -12,9 +12,11 @@ const xu = 18;
 const yu = 24;
 const overlap = 8;
 
+const sidewidth = 200;
+
 // create game element
 const $game = document.getElementById('game');
-$game.style.width = (width - height / 2 + 1) * xu + 'px';
+$game.style.width = (width - height / 2 + 1) * xu + sidewidth + 'px';
 $game.style.height = yu + (height - 1) * (yu - overlap) + 'px';
 
 // create canvases
@@ -61,7 +63,7 @@ const Tiles = {
     floor: {
         spritex: 0, //1,
         spritey: 0,
-        color: 'hsl(40, 10%, 25%)', //'hsl(0, 0%, 100%)',
+        color: 'hsl(40, 10%, 25%)',
         bgcolor: 'hsl(240, 10%, 10%)',
         passable: true,
     },
@@ -132,6 +134,13 @@ const Tiles = {
         spritey: 4,
         color: 'white',
     },
+    pit: {
+        spritex: 13,
+        spritey: 4,
+        color: 'hsl(40, 10%, 25%)',
+        bgcolor: 'hsl(240, 10%, 10%)',
+        passable: true,
+    }
 };
 
 // create cached canvases for a tile
@@ -312,7 +321,7 @@ const animate = () => {
     }
 };
 
-const animation = {
+/*const animation = {
     // clear animation queue
     clearQueue() {
         animationQueue.next = undefined;
@@ -398,7 +407,7 @@ const animation = {
         }
         animate();
     },
-};
+};*/
 
 //========================================
 //                                  OUTPUT

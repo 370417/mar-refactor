@@ -1,6 +1,6 @@
 body {
 	background: #000;
-	color: hsl(40, 10%, 75%);
+	color: white;
     font: 14px/16px Menlo, "DejaVu Sans Mono", Monaco, monospace;
     margin: 0;
 }
@@ -24,4 +24,29 @@ canvas {
 	image-rendering: crisp-edges;
 	image-rendering: pixelated;
 	-ms-interpolation-mode: nearest-neighbor;
+}
+
+#side {
+    width: 200px;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.ui-box {
+    margin: 7px;
+    border: 1px solid white;
+    padding: 4px;
+    opacity: 0.6667;
+}
+
+#status div::before {
+    content: attr(class);
+    text-transform: capitalize;
+}
+
+#status div::after {
+    content: attr(data-value);
+    float: right;
 }

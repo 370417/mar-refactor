@@ -1,4 +1,5 @@
 const createGame = function({width, height, seed, output}) {
+
     // main prng for everything but level generation
     const prng = new Math.seedrandom(seed);
 
@@ -20,34 +21,50 @@ const createGame = function({width, height, seed, output}) {
             passable: false,
             transparent: false,
         },
+        pit: {
+            passable: true,
+            transparent: true,
+        },
     };
 
-    const changeTileType = function(tile, type) {
+    const setTileType = function(tile, type) {
         return Object.assign(tile, Tiles[type], {type});
     };
 
     // create schedule
     const schedule = Schedule();
+    // ticks since the last player move
+    let now = 0;
+    
+    // advance to the next actor
+    const nextTurn = function() {
+        const {event: actor, delta} = schedule.advance();
+        now += delta;
+        actor.act();
+    };
 
-    const Actor = function(type, level, x, y) {
-        const setLevel = function(newLevel) {
-            level = newLevel;
+    //========================================
+    //                                  ACTORS
+    let Actor;
+    {
+        const setLevel = function(level) {
+            this.level = level;
         };
 
-        const act = function(delta) {
-            return this[this.state](delta);
+        const act = function() {
+            return this[this.state]();
         };
 
         const passable = function(x, y) {
-            return level[x][y].passable && !level[x][y].actor;
+            return this.level[x][y].passable && !this.level[x][y].actor;
         };
 
-        const move = function(dx, dy, delta = 0) {
+        const move = function(dx, dy) {
             if (this.passable(this.x + dx, this.y + dy)) {
-                level[this.x][this.y].actor = undefined;
+                this.level[this.x][this.y].actor = undefined;
                 this.x += dx;
                 this.y += dy;
-                level[this.x][this.y].actor = this;
+                this.level[this.x][this.y].actor = this;
                 output({
                     type: 'move actor',
                     value: {
@@ -57,7 +74,7 @@ const createGame = function({width, height, seed, output}) {
                         x2: this.x,
                         y2: this.y,
                     },
-                    delta,
+                    delta: now,
                 });
 
                 if (this === player) {
@@ -68,21 +85,20 @@ const createGame = function({width, height, seed, output}) {
             }
 
             schedule.add(this, this.delay, this.priority);
-            const {event: nextActor, delta: nextDelta} = schedule.advance();
-            nextActor.act(nextDelta);
+            nextTurn();
         };
 
         const see = function() {
-            const transparent = (x, y) => level[x][y].transparent;
+            const transparent = (x, y) => this.level[x][y].transparent;
             const reveal = (x, y) => {
-                const tile = level[x][y];
+                const tile = this.level[x][y];
                 tile.newVisible = true;
-                level[x][y].seen = true;
+                this.level[x][y].seen = true;
             };
             fov(this.x, this.y, transparent, reveal);
 
             forEachTile((x, y) => {
-                const tile = level[x][y];
+                const tile = this.level[x][y];
                 if (tile.newVisible) {
                     if (tile.visible) {
                         output({
@@ -134,7 +150,14 @@ const createGame = function({width, height, seed, output}) {
         };
 
         const playing = function() {
+            now = 0;
             output({ type: 'done' });
+        };
+
+        const sleeping = function() {
+            console.log('danger noodle');
+            schedule.add(this, this.delay, this.priority);
+            nextTurn();
         };
 
         const prototype = {
@@ -155,18 +178,23 @@ const createGame = function({width, height, seed, output}) {
                 state: 'playing',
                 priority: 2,
             },
+            snake: {
+                sleeping,
+            },
         };
 
-        const actor = Object.assign(prototype, Actors[type], {type, x, y});
-        
-        schedule.add(actor, 0, actor.priority);
+        Actor = function(type, level, x, y) {
+            const actor = Object.assign({}, prototype, Actors[type], {type, level, x, y});
+            
+            schedule.add(actor, 0, actor.priority);
 
-        if (level && x && y) {
-            level[x][y].actor = actor;
-        }
+            if (level && x && y) {
+                level[x][y].actor = actor;
+            }
 
-        return actor;
-    };
+            return actor;
+        };
+    }
 
     // create player
     const player = Actor('player');
@@ -188,9 +216,9 @@ const createGame = function({width, height, seed, output}) {
                 for (let y = 0; y < height; y++) {
                     if (inBounds(x, y)) {
                         if (x === startx && y === starty) {
-                            level[x][y] = changeTileType({}, 'floor');
+                            level[x][y] = setTileType({}, 'floor');
                         } else {
-                            level[x][y] = changeTileType({}, 'wall');
+                            level[x][y] = setTileType({}, 'wall');
                         }
                     }
                 }
@@ -210,7 +238,7 @@ const createGame = function({width, height, seed, output}) {
             for (let i = 0; i < scrambledTiles.length; i++) {
                 const {x, y} = scrambledTiles[i];
                 if (countGroups(x, y, isFloor) !== 1) {
-                    changeTileType(level[x][y], 'floor');
+                    setTileType(level[x][y], 'floor');
                 }
             }
         };
@@ -233,7 +261,7 @@ const createGame = function({width, height, seed, output}) {
                 const tile = level[x][y];
                 if (tile.type === 'wall') {
                     if (tile.wallGroup.size < 6) {
-                        changeTileType(tile, 'floor');
+                        setTileType(tile, 'floor');
                     } else {
                         tile.wallGroup = undefined;
                     }
@@ -253,7 +281,7 @@ const createGame = function({width, height, seed, output}) {
                     if (tile.mainCave) {
                         tile.mainCave = undefined;
                     } else {
-                        changeTileType(tile, 'wall');
+                        setTileType(tile, 'wall');
                     }
                 }
             });
@@ -267,7 +295,7 @@ const createGame = function({width, height, seed, output}) {
             if (!isDeadEnd(x, y)) {
                 return;
             }
-            changeTileType(level[x][y], 'wall');
+            setTileType(level[x][y], 'wall');
             for (const key in directions) {
                 const {dx, dy} = directions[key];
                 if (x === startx && y === starty && isFloor(x + dx, y + dy)) {
@@ -299,7 +327,7 @@ const createGame = function({width, height, seed, output}) {
                 };
                 floodFill(x, y, passable, callback);
                 if (size === 2) {
-                    changeTileType(level[x][y], 'wall');
+                    setTileType(level[x][y], 'wall');
                 }
             });
             // clear the isCave flag
@@ -329,7 +357,7 @@ const createGame = function({width, height, seed, output}) {
                     const passable = (x, y) => inBounds(x, y) && isWall(x, y);
                     const callback = (x, y) => {
                         level[x][y].flooded = undefined;
-                        changeTileType(level[x][y], 'floor');
+                        setTileType(level[x][y], 'floor');
                     };
                     floodFill(x, y, passable, callback);
                 }
@@ -360,21 +388,17 @@ const createGame = function({width, height, seed, output}) {
             level[startx][starty].actor = player;
         };
 
-        const isGrass = (x, y) => level[x][y].type === 'grass';
-
-        const testGrass = function() {
-            // list all inner tiles in random order
-            const scrambledTiles = [];
+        const placeStairs = function() {
+            const valid = [];
             forEachInnerTile((x, y) => {
-                scrambledTiles.splice(randInt(0, scrambledTiles.length + 1, prng), 0, {x, y});
-            });
-
-            for (let i = 0; i < scrambledTiles.length; i++) {
-                const {x, y} = scrambledTiles[i];
-                if (isFloor(x, y) && countGroups(x, y, isGrass) !== 1) {
-                    changeTileType(level[x][y], 'grass');
+                const tile = level[x][y];
+                if (isCave(x, y) && tile.passable && !tile.actor) {
+                    valid.push({x, y});
                 }
-            }
+            });
+            const {x, y} = randElement(valid, prng);
+            setTileType(level[x][y], 'pit');
+            level[x][y].prop = 'stairsDown';
         };
 
         const placeTripwires = function() {
@@ -418,6 +442,25 @@ const createGame = function({width, height, seed, output}) {
             });
         };
 
+        const placeMonsters = function() {
+            // find size of available area
+            let size = 0;
+            forEachInnerTile((x, y) => {
+                const tile = level[x][y];
+                if (tile.passable && !tile.actor && !tile.prop) {
+                    size++;
+                }
+            });
+            forEachInnerTile((x, y) => {
+                const tile = level[x][y];
+                if (tile.passable && !tile.actor && !tile.prop) {
+                    if (prng() < 6 / size) {
+                        const actor = Actor('snake', level, x, y);
+                    }
+                }
+            });
+        };
+
         init();
         carveCaves();
         removeOtherCaves();
@@ -429,9 +472,10 @@ const createGame = function({width, height, seed, output}) {
         if (floorSize() < 314) {
             return Level({depth, startx, starty});
         }
-        //testGrass();
         placePlayer();
-        placeTripwires();
+        placeStairs();
+        //placeTripwires();
+        placeMonsters();
 
         return level;
     };
@@ -444,7 +488,7 @@ const createGame = function({width, height, seed, output}) {
 
     // start game clock
     player.see();
-    schedule.advance().event.act();
+    nextTurn();
 
     const input = function({type, value}) {
         if (type === 'move') {
@@ -455,11 +499,13 @@ const createGame = function({width, height, seed, output}) {
             }
             else if (player.passable(x + value.clockwise.dx, y + value.clockwise.dy) &&
                     !player.passable(x + value.counterclockwise.dx, y + value.counterclockwise.dy)) {
-                player.move(value.clockwise.dx, value.clockwise.dy, 8);
+                now += 8;
+                player.move(value.clockwise.dx, value.clockwise.dy);
             }
             else if (!player.passable(x + value.clockwise.dx, y + value.clockwise.dy) &&
                     player.passable(x + value.counterclockwise.dx, y + value.counterclockwise.dy)) {
-                player.move(value.counterclockwise.dx, value.counterclockwise.dy, 8);
+                now += 8;
+                player.move(value.counterclockwise.dx, value.counterclockwise.dy);
             }
         }
     };

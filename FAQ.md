@@ -4,18 +4,49 @@
 [2: Development Tools](#2-development-tools)  
 [3: The Game Loop](#3-the-game-loop)  
 [4: World Architecture](#4-world-architecture)  
+[5: Data Management](#5-data-management)  
+[6: Content Creation and Balance](#6-content-creation-and-balance)  
+[7: Loot](#7-loot)  
+[8: Core Mechanic](#8-core-mechanic)  
+[9: Debugging](#9-debugging)  
 [10: Project Management](#10-project-management)  
 [11: Random Number Generation](#11-random-number-generation)  
 [12: Field of Vision](#12-field-of-vision)  
 [13: Geometry](#13-geometry)  
 [14: Inspiration](#14-inspiration)  
+[15: AI](#15-ai)  
+[16: UI Design](#16-ui-design)  
+[17: UI Implementation](#17-ui-implementation)  
+[18: Input Handling](#18-input-handling)  
+[19: Permadeath](#19-permadeath)  
+[20: Saving](#20-saving)  
+[21: Morgue Files](#21-morgue-files)  
 [22: Map Generation](#22-map-generation)  
 [23: Map Design](#23-map-design)  
+[24: World Structure](#24-world-structure)  
+[25: Pathfinding](#25-pathfinding)  
+[26: Animation](#26-animation)  
+[27: Color](#27-color)  
 [28: Map Object Representation](#28-map-object-representation)  
+[29: Fonts and Styles](#29-fonts-and-styles)  
+[30: Message Logs](#30-message-logs)  
 [31: Pain Points](#31-pain-points)  
+[32: Combat Algorithms](#32-combat-algorithms)  
+[33: Architecture Planning](#33-architecture-planning)  
+[34: Feature Planning](#34-feature-planning)  
+[35: Playtesting and Feedback](#35-playtesting-and-feedback)  
 [36: Character Progression](#36-character-progression)  
+[37: Hunger Clocks](#37-hunger-clocks)  
+[38: Identification Systems](#38-identification-systems)  
+[39: Analytics](#39-analytics)  
+[40: Inventory Management](#40-inventory-management)  
 [41: Time Systems](#41-time-systems)  
+[42: Achievements and Scoring](#42-achievements-and-scoring)  
+[43: Tutorials and Help](#43-tutorials-and-help)  
+[44: Ability and Effect Systems](#44-ability-and-effect-systems)  
 [45: Libraries Redux](#45-libraries-redux)  
+[46: Optmization](#46-optimization)  
+[47: Options and Configuration](#47-options-and-configuration)  
 [48: Developer Motivation](#48-developer-motivation)  
 
 ## 1: Languages and Libraries
@@ -49,7 +80,7 @@ I write my code in Sublime Text 2 and execute it in Chrome with no development-r
 
 > How do you structure your game loop? Why did you choose that method? Or maybe you're using an existing engine that already handles all this for you under the hood?
 
-The Display receives user input and tells it to the Game, which is independant of UI. The game processes that input (see the [time systems](#41-time-systems) question for more details) and gives the Display some output. That output is placed in a schedule, then animated when the game says its ready for more input.
+The Display receives user input and tells it to the Game, which is independent of UI. The game processes that input (see the [time systems](#41-time-systems) question for more details) and gives the Display some output. That output is placed in a schedule, then animated when the game says its ready for more input.
 
 ## 4: World Architecture
 
@@ -133,7 +164,7 @@ Many a Rogue uses a hex grid. This works well because the game takes place in ca
 
 * My favorite game, a little flash game called Sonny 2
 * Two other flash games, Starfighter: Disputed Galaxy and Realm of the Mad God
-* The roguelikes I play semi-frequently: Rogue, Brogue, and Sil
+* The roguelikes I play semi-frequently: Brogue and Sil
 * /r/roguelikedev
 * Mythology and fables
 * More that doesn't come to mind right now
@@ -141,6 +172,10 @@ Many a Rogue uses a hex grid. This works well because the game takes place in ca
 ## 15: AI
 
 > What's your approach to AI?
+
+Noise
+
+Each actor has a hear function. When noise is produced, a function makeNoise is called, which iterates through the map and calls each actor's hear function with the source, strength, and type of sound produced. The hear function is then in charge of changing the actor's state
 
 ## 16: UI Design
 
@@ -229,7 +264,7 @@ Describe your animation system's architecture. How are animations associated wit
 
 > "What's the most painful or tricky part in how your game is made up? Did something take a huge amount of effort to get right? Are there areas in the engine where the code is a mess that you dread to even look at? Are there ideas you have that you just haven't gotten to work or haven't figured out how to turn into code? What do you think are the hardest parts in a roguelike codebase to get right, and do you have any implementation tips for them?"
 
-I have a file called utility.js that has beautiful utility functions that are geometry independant, simple to understand, ~~well commented~~, and useful for just about any roguelike I try to make. This file has:
+I have a file called utility.js that has beautiful utility functions that are geometry independent, simple to understand, ~~well commented~~, and useful for just about any roguelike I try to make. This file has:
 
 * hex directions
 * lines, rays, distance
@@ -243,6 +278,12 @@ Everything else in my code is a pain point.
 ## 32: Combat Algorithms
 
 > What formulas is your combat based on?
+
+The core of combat is the concept of Initiative. Initiative is a number from 0 to 100 that represents an actor's energy, alertness, and combat advantage in general. Base initiative is 50. Initiative affects and is affected by combat. There are a bunch of cool implications of this system:
+
+* Melee combat is more interesting because the outcome of each attack matters
+* Ambushes! If an actor is attacked from an unknown source, it loses a lot of initiative.
+* Certain abilities recharge initiative through movement, breaking the usual arrow key monotony.
 
 ## 33: Architecture Planning
 
@@ -273,6 +314,9 @@ Almost everything the player can do in Many a Rogue is a skill. For example, her
 Trigger: Bump into an enemy  
 Conditions: Have no weapon equipped  
 Effect: Deal damage to the enemy equal to your strength
+On Level Up: +1 Strength 
+
+The first line specifies how the skill can be activated: either though a trigger for active abilities, a toggle for temporary effects, or nothnig for a passive effect. 
 
 Items
 
