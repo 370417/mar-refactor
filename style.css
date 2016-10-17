@@ -41,6 +41,10 @@ canvas {
     opacity: 0.6667;
 }
 
+#status div {
+    background: linear-gradient(to right, red 50%, green 50%);
+}
+
 #status div::before {
     content: attr(class);
     text-transform: capitalize;

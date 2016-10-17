@@ -225,7 +225,7 @@ const fov = (() => {
 
 // Calculate an influence map (aka flow map/Dijkstra map)
 // this funtion assumes that nodes have their distance set already, noromally end nodes to 0 and all others to Infinity
-const influenceMap = (nodes, forEachNeighbor, getDistance, setDistance, getCost, getVisited, setVisited) => {
+const influenceMap = (nodes, forEachNeighbor, getDistance, setDistance, getCost, getVisited, setVisited, range = Infinity) => {
     const unvisited = new Heap((a, b) => getDistance(a) - getDistance(b));
 
     nodes.forEach((node) => {
@@ -238,7 +238,7 @@ const influenceMap = (nodes, forEachNeighbor, getDistance, setDistance, getCost,
 
         forEachNeighbor(node, (neighbor) => {
             const altDistance = getDistance(node) + getCost(neighbor);
-            if (!getVisited(neighbor) && altDistance < getDistance(neighbor)) {
+            if (!getVisited(neighbor) && altDistance <= range && altDistance < getDistance(neighbor)) {
                 setDistance(neighbor, altDistance);
                 unvisited.updateItem(neighbor);
             }

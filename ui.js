@@ -412,14 +412,14 @@ const animate = () => {
 //========================================
 //                                  OUTPUT
 
-const output = ({type, value, delta}) => {
+const output = ({type, value, time}) => {
     if (type === 'done') {
         if (currMode() === 'playing') {
             inputMode.push('animating');
         }
         animate();
     } else {
-        animationQueue.add({type, value, delta}, 0);
+        animationQueue.add({type, value}, time);
     }
 };
 

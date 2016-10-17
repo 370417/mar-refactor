@@ -35,12 +35,22 @@ const createGame = function({width, height, seed, output}) {
     const schedule = Schedule();
     // ticks since the last player move
     let now = 0;
+    const outputNow = function(event) {
+        event.time = now;
+        return output(event);
+    };
     
     // advance to the next actor
     const nextTurn = function() {
         const {event: actor, delta} = schedule.advance();
         now += delta;
         actor.act();
+    };
+
+    //========================================
+    //                             NOISE/SOUND
+    const makeNoise = function(level, sound, strength, x, y) {
+
     };
 
     //========================================
@@ -51,7 +61,22 @@ const createGame = function({width, height, seed, output}) {
             this.level = level;
         };
 
+        const hear = function(sound, strength, x, y) {
+            if (strength >= this.hearing) {
+                this.sounds.push({sound, strength, x, y});
+            }
+            else if (strength >= 2 * this.hearing) {
+                this.sounds.push({sound, strength});
+            }
+            else if (strength >= 3 * this.hearing) {
+                this.sounds.push({strength});
+            }
+        };
+
         const act = function() {
+            const tile = this.level[this.x][this.y];
+            this.hear(tile.ambience);
+            //this.processNoise()
             return this[this.state]();
         };
 
@@ -65,7 +90,7 @@ const createGame = function({width, height, seed, output}) {
                 this.x += dx;
                 this.y += dy;
                 this.level[this.x][this.y].actor = this;
-                output({
+                outputNow({
                     type: 'move actor',
                     value: {
                         type: this.type,
@@ -74,14 +99,13 @@ const createGame = function({width, height, seed, output}) {
                         x2: this.x,
                         y2: this.y,
                     },
-                    delta: now,
                 });
 
                 if (this === player) {
                     this.see();
                 }
             } else {
-                //output(not passable)
+                //outputNow(not passable)
             }
 
             schedule.add(this, this.delay, this.priority);
@@ -101,12 +125,12 @@ const createGame = function({width, height, seed, output}) {
                 const tile = this.level[x][y];
                 if (tile.newVisible) {
                     if (tile.visible) {
-                        output({
+                        outputNow({
                             type: 'change tile visibility',
                             value: { x, y, visible: true },
                         });
                     } else {
-                        output({
+                        outputNow({
                             type: 'new tile',
                             value: {
                                 type: tile.type,
@@ -116,7 +140,7 @@ const createGame = function({width, height, seed, output}) {
                             },
                         });
                         if (tile.prop) {
-                            output({
+                            outputNow({
                                 type: 'set prop',
                                 value: {
                                     type: tile.prop,
@@ -126,7 +150,7 @@ const createGame = function({width, height, seed, output}) {
                         }
                     }
                     if (tile.actor) {
-                        output({
+                        outputNow({
                             type: 'move actor',
                             value: {
                                 type: tile.actor.type,
@@ -139,7 +163,7 @@ const createGame = function({width, height, seed, output}) {
                     }
                 }
                 else if (tile.visible) {
-                    output({
+                    outputNow({
                         type: 'change tile visibility',
                         value: { x, y, visible: false },
                     });
@@ -151,7 +175,7 @@ const createGame = function({width, height, seed, output}) {
 
         const playing = function() {
             now = 0;
-            output({ type: 'done' });
+            outputNow({ type: 'done' });
         };
 
         const sleeping = function() {
@@ -163,6 +187,7 @@ const createGame = function({width, height, seed, output}) {
         const prototype = {
             setLevel,
             passable,
+            hear,
             act,
             move,
             state: 'sleeping',
