@@ -48,6 +48,7 @@
 [46: Optmization](#46-optimization)  
 [47: Options and Configuration](#47-options-and-configuration)  
 [48: Developer Motivation](#48-developer-motivation)  
+[49: Awareness Systems](#39-awareness-systems)  
 
 ## 1: Languages and Libraries
 
@@ -367,3 +368,7 @@ See [question 1](#1-languages-and-libraries).
 ## 48: Developer Motivation
 
 > How do you get motivated? How do you stay motivated?
+
+## 49: Awareness Systems
+
+> How does your roguelike allow the player and/or other entities to discover or avoid each other? What other systems or features tie into this?

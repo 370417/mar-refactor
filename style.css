@@ -26,6 +26,19 @@ canvas {
 	-ms-interpolation-mode: nearest-neighbor;
 }
 
+svg {
+    z-index: 1;
+    position: relative;
+}
+
+svg polygon {
+    fill: transparent;
+}
+
+svg polygon:hover {
+    fill: white;
+}
+
 #side {
     width: 200px;
     position: absolute;
@@ -38,11 +51,34 @@ canvas {
     margin: 7px;
     border: 1px solid white;
     padding: 4px;
-    opacity: 0.6667;
 }
 
 #status div {
-    background: linear-gradient(to right, red 50%, green 50%);
+    padding: 2px 2px 3px;
+    background-size: 100% 4px;
+    background-repeat: no-repeat;
+    background-position: bottom;
+}
+
+#enemy-statuses {
+    position: absolute;
+    bottom: 0;
+}
+
+#enemy-statuses span {
+    line-height: 24px;
+}
+
+#side canvas {
+    position: static;
+}
+
+.life {
+    background-image: linear-gradient(to right, #A00 100%, #000 100%);
+}
+
+.initiative {
+    background-image: linear-gradient(to right, #880 50%, #000 50%);
 }
 
 #status div::before {

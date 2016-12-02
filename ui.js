@@ -46,6 +46,25 @@ for (let i = 0; i < height; i++) {
 }
 
 //========================================
+//                             SVG OVERLAY
+
+const createSvgElement = function(elementName) {
+    return document.createElementNS('http://www.w3.org/2000/svg', elementName);
+}
+
+const svg = document.getElementById('svg');
+svg.setAttribute('width', (width - height / 2 + 1) * xu);
+svg.setAttribute('height', yu + (height - 1) * (yu - overlap));
+
+forEachTileOfLevel(width, height, (x, y) => {
+    const polygon = createSvgElement('polygon');
+    x = (x - (height - y - 1) / 2) * xu;
+    y = y * (yu - overlap) + overlap - 1;
+    polygon.setAttribute('points', `${x},${y+3} ${x+9},${y} ${x+18},${y+3} ${x+18},${y+15} ${x+9},${y+18} ${x},${y+15}`);
+    svg.appendChild(polygon);
+});
+
+//========================================
 //                                   TILES
 
 const tileset = document.createElement('img');
@@ -57,14 +76,14 @@ const Tiles = {
         spritex: 0,
         spritey: 0,
         color: wallColor,
-        bgcolor: 'hsl(240, 10%, 18%)',
+        //bgcolor: 'hsl(240, 10%, 18%)',
         passable: false,
     },
     floor: {
-        spritex: 0, //1,
+        spritex: 1,
         spritey: 0,
-        color: 'hsl(40, 10%, 25%)',
-        bgcolor: 'hsl(240, 10%, 10%)',
+        color: 'white',
+        //bgcolor: 'hsl(240, 10%, 10%)',
         passable: true,
     },
     grass: {
@@ -214,12 +233,14 @@ const drawTile = (x, y, clear = true) => {
     const drawImage = (canvas) => ctx.drawImage(canvas, 0, 0, xu, yu, realx, 0, xu, yu);
 
     if (tile.visible) {
-        drawImage(Tiles[tile.type].canvas);
         if (tile.actor) {
             drawImage(Tiles[tile.actor.type].canvas);
         }
         else if (tile.prop) {
             drawImage(Tiles[tile.prop].canvas);
+        }
+        else {
+            drawImage(Tiles[tile.type].canvas);
         }
     } else {
         ctx.drawImage(Tiles[tile.type].bgcanvas, 0, 0, xu, yu, realx, 0, xu, yu);
@@ -236,6 +257,31 @@ const drawReticle = (x, y) => {
 };
 
 const tileIsType = (x, y, type) => level[x] && level[x][y] && level[x][y].type === type;
+
+//========================================
+//                                 SIDEBAR
+
+const uiBox = (type) => {
+    const box = document.createElement('div');
+    box.classList.add('ui-box');
+
+    const sprite = document.createElement('canvas');
+    sprite.width = 18;
+    sprite.height = 24;
+    sprite.getContext('2d').drawImage(Tiles[type].canvas, 0, 0);
+    box.appendChild(sprite);
+
+    const name = document.createElement('span');
+    name.textContent = type;
+    box.appendChild(name);
+
+    document.getElementById('enemy-statuses').appendChild(box);
+    return box;
+};
+
+const removeUiBox = (box) => {
+    document.getElementById('enemy-statuses').removeChild(box);
+};
 
 //========================================
 //                               ANIMATION
@@ -264,7 +310,6 @@ const clearTickout = () => {
 
 // animate one frame
 const animate = () => {
-
     const next = animationQueue.advance();
     if (!next) {
         inputMode.pop();
@@ -274,7 +319,7 @@ const animate = () => {
         return;
     }
     const animType = next.event.type;
-    const delay = next.event.delta || 0;
+    const delay = next.delta || 0;
     let nextFrame = () => console.log(animType);
 
     if (animType === 'new tile') {
@@ -290,14 +335,19 @@ const animate = () => {
     else if (animType === 'change tile visibility') {
         nextFrame = () => {
             const {x, y, visible} = next.event.value;
+            if (!visible && level[x][y].actor) {
+                clearTile(x, y);
+                removeUiBox(level[x][y].actor.box);
+                level[x][y].actor = undefined;
+            }
             level[x][y].visible = visible;
             drawTile(x, y, false);
             animate();
         };
     }
     else if (animType === 'set prop') {
-        const {x, y, type} = next.event.value;
         nextFrame = () => {
+            const {x, y, type} = next.event.value;
             level[x][y].prop = type;
             drawTile(x, y);
             animate();
@@ -306,10 +356,22 @@ const animate = () => {
     else if (animType === 'move actor') {
         nextFrame = () => {
             const {x1, y1, x2, y2, type} = next.event.value;
+            let actor = level[x1][y1].actor;
+            if (!actor) {
+                actor = {type};
+                if (type !== 'player') {
+                    actor.box = uiBox(type);
+                }
+            }
             level[x1][y1].actor = undefined;
             drawTile(x1, y1);
-            level[x2][y2].actor = {type};
+            level[x2][y2].actor = actor;
             drawTile(x2, y2);
+            animate();
+        };
+    }
+    else if (animType === 'take damage') {
+        nextFrame = () => {
             animate();
         };
     }

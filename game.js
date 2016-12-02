@@ -49,9 +49,57 @@ const createGame = function({width, height, seed, output}) {
 
     //========================================
     //                             NOISE/SOUND
-    const makeNoise = function(level, sound, strength, x, y) {
 
+    /// level - the game level to make the sound on
+    /// sound - the properties of the sound
+    /// strength - how strong the sound is at the source
+    /// mask - how strong auditory masking is for this sound as a proportion of strength
+    /// ox, oy - origin of sound
+    const makeNoise = function(level, sound, strength, mask, ox, oy) {
+        const forEachNeighbor = ({x, y}, fun) => {
+            if (level[x][y].distance >= strength) {
+                return;
+            }
+            for (const key in directions) {
+                const {dx, dy} = directions[key];
+                if (level[x+dx][y+dy].passable) {
+                    fun({x: x + dx, y: y + dy});
+                }
+            }
+        };
+
+        const getDistance = ({x, y}) => level[x][y].visited ? level[x][y].distance : Infinity;
+
+        const setDistance = ({x, y}, distance) => level[x][y].distance = distance;
+
+        const getCost = ({x, y}) => 1;
+
+        const getVisited = ({x, y}) => level[x][y].visited;
+
+        const setVisited = ({x, y}) => level[x][y].visited = true;
+
+        level[ox][oy].distance = 0;
+        influenceMap([{x: ox, y: oy}], forEachNeighbor, getDistance, setDistance, getCost, getVisited, setVisited);
+
+        forEachInnerTile((x, y) => {
+            const tile = level[x][y];
+            if (tile.actor) {
+                if (tile.distance < strength)
+                tile.actor.hear(sound, strength - tile.distance, mask * (strength - tile.distance), ox, oy);
+            }
+            tile.distance = undefined;
+            tile.visited = undefined;
+        });
     };
+
+    //========================================
+    //                                 WEAPONS
+    // sword - restores 25 init on hit
+    // spear - restores 10 init per open neighbor per hit
+
+    // active melee abilities, usable with any weapon
+    // ?? - costs 25 init, restores 10 init on hit
+    // 
 
     //========================================
     //                                  ACTORS
@@ -61,22 +109,33 @@ const createGame = function({width, height, seed, output}) {
             this.level = level;
         };
 
-        const hear = function(sound, strength, x, y) {
+        const compareSound = function(a, b) {
+            return a.strength - b.strength;
+        };
+
+        const hear = function(sound, strength, masking, x, y) {
+            // if footsteps from this actor, masking is lowered
+            // add sounds to schedule sorted by Number.MAX_SAFE_INTEGER - strength
+
             if (strength >= this.hearing) {
                 this.sounds.push({sound, strength, x, y});
             }
-            else if (strength >= 2 * this.hearing) {
+            else if (2 * strength >= this.hearing) {
                 this.sounds.push({sound, strength});
             }
-            else if (strength >= 3 * this.hearing) {
-                this.sounds.push({strength});
-            }
+        };
+
+        const processNoise = function() {
+            // advance and store first sound
+            // schedule a cap at a time equal to the net auditory masking
+            // each noise adds to masking
+            this.sounds = [];
         };
 
         const act = function() {
             const tile = this.level[this.x][this.y];
-            this.hear(tile.ambience);
-            //this.processNoise()
+            //this.hear(tile.ambience);
+            this.processNoise()
             return this[this.state]();
         };
 
@@ -90,6 +149,9 @@ const createGame = function({width, height, seed, output}) {
                 this.x += dx;
                 this.y += dy;
                 this.level[this.x][this.y].actor = this;
+
+                makeNoise(this.level, 'player footsteps', 6, 0.5, this.x, this.y);
+
                 outputNow({
                     type: 'move actor',
                     value: {
@@ -110,6 +172,23 @@ const createGame = function({width, height, seed, output}) {
 
             schedule.add(this, this.delay, this.priority);
             nextTurn();
+        };
+
+        const takeDamage = function(damage) {
+            if (this.level[this.x][this.y].visible) {
+                outputNow({
+                    type: 'take damage',
+                    value: {
+                        x: this.x,
+                        y: this.y,
+                        damage,
+                    },
+                });
+            }
+        };
+
+        const attack = function(actor) {
+            actor.takeDamage(20);
         };
 
         const see = function() {
@@ -188,12 +267,16 @@ const createGame = function({width, height, seed, output}) {
             setLevel,
             passable,
             hear,
+            processNoise,
             act,
+            takeDamage,
+            attack,
             move,
             state: 'sleeping',
             lastMove: DIR0,
             delay: 24,
             priority: 1,
+            hearing: 6,
         };
 
         const Actors = {
@@ -210,7 +293,8 @@ const createGame = function({width, height, seed, output}) {
 
         Actor = function(type, level, x, y) {
             const actor = Object.assign({}, prototype, Actors[type], {type, level, x, y});
-            
+            actor.sounds = new Heap(compareSound);
+
             schedule.add(actor, 0, actor.priority);
 
             if (level && x && y) {
@@ -521,6 +605,9 @@ const createGame = function({width, height, seed, output}) {
             const {x, y} = player;
             if (player.passable(x + dx, y + dy)) {
                 player.move(dx, dy);
+            }
+            else if (player.level[x+dx][y+dy].actor) {
+                player.attack(player.level[x+dx][y+dy].actor);
             }
             else if (player.passable(x + value.clockwise.dx, y + value.clockwise.dy) &&
                     !player.passable(x + value.counterclockwise.dx, y + value.counterclockwise.dy)) {
